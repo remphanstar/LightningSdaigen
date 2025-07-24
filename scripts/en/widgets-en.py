@@ -30,7 +30,7 @@ PATHS = {k: Path(v) for k, v in osENV.items() if k.endswith('_path')}   # k -> k
 
 HOME = PATHS['home_path']
 SCR_PATH = PATHS['scr_path']
-SETTINGS_PATH = PATHS['settings_path']
+SETTINGS_PATH = SCR_PATH / 'settings.json'
 ENV_NAME = js.read(SETTINGS_PATH, 'ENVIRONMENT.env_name')
 
 SCRIPTS = SCR_PATH / 'scripts'
@@ -50,7 +50,7 @@ class WidgetManager:
         self.factory = WidgetFactory()
         self.widgets = {}
         self.settings_keys = [
-            'XL_models', 'model', 'model_num', 'inpainting_model', 'vae', 'vae_num',
+            'XL_models', 'model', 'model_num', 'inpainting_model', 'vae', 'vae_num', 'lora',
             'latest_webui', 'latest_extensions', 'check_custom_nodes_deps', 'change_webui', 'detailed_download',
             'controlnet', 'controlnet_num', 'commit_hash',
             'civitai_token', 'huggingface_token', 'zrok_token', 'ngrok_token', 'commandline_arguments', 'theme_accent',
@@ -73,7 +73,8 @@ class WidgetManager:
         type_map = {
             'model': ('model_list', ['none']),
             'vae': ('vae_list', ['none', 'ALL']),
-            'cnet': ('controlnet_list', ['none', 'ALL'])
+            'cnet': ('controlnet_list', ['none', 'ALL']),
+            'lora': ('lora_list', ['none', 'ALL'])
         }
         key, prefixes = type_map[data_type]
         local_vars = {}
@@ -149,7 +150,7 @@ model_preferred_defaults = [
     'Merged amateurs - Mixed Amateurs',  # Second option
 ]
 model_default = wm.get_safe_default(model_options, model_preferred_defaults)
-model_widget = factory.create_dropdown(model_options, 'Model:', model_default)
+model_widget = factory.create_select_multiple(model_options, 'Model:', (model_default,))
 
 model_num_widget = factory.create_text('Model Number:', '', 'Enter model numbers for download.')
 inpainting_model_widget = factory.create_checkbox('Inpainting Models', False, class_names=['inpaint'], layout={'width': '250px'})
@@ -186,6 +187,17 @@ wm.widgets.update({
     'vae_num': vae_num_widget
 })
 
+# --- LORA ---
+"""Create LoRA selection widgets."""
+lora_header = factory.create_header('LoRA Selection')
+lora_options = wm.read_model_data(f"{SCRIPTS}/_models-data.py", 'lora')
+lora_widget = factory.create_select_multiple(lora_options, 'LoRA:', ('none',))
+
+wm.widgets.update({
+    'lora': lora_widget
+})
+
+
 # --- ADDITIONAL ---
 """Create additional configuration widgets."""
 additional_header = factory.create_header('Additional')
@@ -207,7 +219,7 @@ choose_changes_box = factory.create_hbox(
 )
 
 controlnet_options = wm.read_model_data(f"{SCRIPTS}/_models-data.py", 'cnet')
-controlnet_widget = factory.create_dropdown(controlnet_options, 'ControlNet:', 'none')
+controlnet_widget = factory.create_select_multiple(controlnet_options, 'ControlNet:', ('none',))
 controlnet_num_widget = factory.create_text('ControlNet Number:', '', 'Enter ControlNet model numbers for download.')
 commit_hash_widget = factory.create_text('Commit Hash:', '', 'Switch between branches or commits.')
 
@@ -483,6 +495,7 @@ if IN_COLAB:
 # Display sections
 model_widgets = [model_header, model_widget, model_num_widget, switch_model_widget]
 vae_widgets = [vae_header, vae_widget, vae_num_widget]
+lora_widgets = [lora_header, lora_widget]
 additional_widgets = additional_widget_list
 custom_download_widgets = [
     custom_download_header_popup,
@@ -500,18 +513,19 @@ custom_download_widgets = [
 # Create Boxes
 model_box = factory.create_vbox(model_widgets, class_names=['container'])
 vae_box = factory.create_vbox(vae_widgets, class_names=['container'])
+lora_box = factory.create_vbox(lora_widgets, class_names=['container'])
 additional_box = factory.create_vbox(additional_widgets, class_names=['container'])
 custom_download_box = factory.create_vbox(custom_download_widgets, class_names=['container', 'container_cdl'])
 
 # Create Containers
 CONTAINERS_WIDTH = '1080px'
-model_vae_box = factory.create_hbox(
-    [model_box, vae_box],
+model_vae_lora_box = factory.create_hbox(
+    [model_box, vae_box, lora_box],
     class_names=['widgetContainer', 'model-vae'],
 )
 
 widgetContainer = factory.create_vbox(
-    [model_vae_box, additional_box, custom_download_box, save_button],
+    [model_vae_lora_box, additional_box, custom_download_box, save_button],
     class_names=['widgetContainer'],
     layout={'min_width': CONTAINERS_WIDTH, 'max_width': CONTAINERS_WIDTH}
 )
@@ -550,6 +564,7 @@ def update_XL_options(change, widget):
         try:
             model_widget.options = wm.read_model_data(f"{SCRIPTS}/{data_file}", 'model')
             vae_widget.options = wm.read_model_data(f"{SCRIPTS}/{data_file}", 'vae')
+            lora_widget.options = wm.read_model_data(f"{SCRIPTS}/{data_file}", 'lora')
             controlnet_widget.options = wm.read_model_data(f"{SCRIPTS}/{data_file}", 'cnet')
         except Exception as e:
             print(f"Warning: Could not update model options: {e}")
@@ -560,11 +575,13 @@ def update_XL_options(change, widget):
             # XL model defaults - use first available XL model
             xl_model_defaults = list(model_widget.options)[1:4]  # Skip 'none', get first few
             xl_vae_defaults = ['none', 'ALL']
+            xl_lora_defaults = ['none']
             xl_controlnet_defaults = ['none']
             
-            model_widget.value = wm.get_safe_default(model_widget.options, xl_model_defaults)
+            model_widget.value = (wm.get_safe_default(model_widget.options, xl_model_defaults),)
             vae_widget.value = wm.get_safe_default(vae_widget.options, xl_vae_defaults)
-            controlnet_widget.value = wm.get_safe_default(controlnet_widget.options, xl_controlnet_defaults)
+            lora_widget.value = (wm.get_safe_default(lora_widget.options, xl_lora_defaults),)
+            controlnet_widget.value = (wm.get_safe_default(controlnet_widget.options, xl_controlnet_defaults),)
             
             # Handle inpainting checkbox for XL
             inpainting_model_widget.add_class('_disable')
@@ -580,11 +597,13 @@ def update_XL_options(change, widget):
                 'ClearVAE(SD1.5) - v2.3',
                 'none'
             ]
+            regular_lora_defaults = ['none']
             regular_controlnet_defaults = ['none']
             
-            model_widget.value = wm.get_safe_default(model_widget.options, regular_model_defaults)
+            model_widget.value = (wm.get_safe_default(model_widget.options, regular_model_defaults),)
             vae_widget.value = wm.get_safe_default(vae_widget.options, regular_vae_defaults)
-            controlnet_widget.value = wm.get_safe_default(controlnet_widget.options, regular_controlnet_defaults)
+            lora_widget.value = (wm.get_safe_default(lora_widget.options, regular_lora_defaults),)
+            controlnet_widget.value = (wm.get_safe_default(controlnet_widget.options, regular_controlnet_defaults),)
             
             # Enable inpainting checkbox for regular models
             inpainting_model_widget.remove_class('_disable')
@@ -633,11 +652,28 @@ def update_empowerment(change, widget):
     except Exception as e:
         print(f"Error in update_empowerment: {e}")
 
+def filter_inpainting_models(change, widget):
+    """Filter model list based on inpainting toggle"""
+    is_inpainting = change['new']
+    current_options = list(model_widget.options)
+    
+    if is_inpainting:
+        filtered_options = [opt for opt in current_options if 'inpainting' in opt.lower() or opt == 'none']
+    else:
+        # Re-read the full list to restore non-inpainting models
+        data_file = '_xl-models-data.py' if XL_models_widget.value else '_models-data.py'
+        filtered_options = wm.read_model_data(f"{SCRIPTS}/{data_file}", 'model')
+
+    model_widget.options = filtered_options
+    if model_widget.value not in filtered_options:
+        model_widget.value = (wm.get_safe_default(filtered_options, ['none']),)
+
 
 # Connecting widgets
 factory.connect_widgets([(change_webui_widget, 'value')], update_change_webui)
 factory.connect_widgets([(XL_models_widget, 'value')], update_XL_options)
 factory.connect_widgets([(empowerment_widget, 'value')], update_empowerment)
+factory.connect_widgets([(inpainting_model_widget, 'value')], filter_inpainting_models)
 
 
 # ================ Load / Save - Settings V4 ===============
@@ -675,7 +711,7 @@ def save_data(button):
     """Handle save button click."""
     save_settings()
     all_widgets = [
-        model_box, vae_box, additional_box, custom_download_box, save_button,   # mainContainer
+        model_box, vae_box, lora_box, additional_box, custom_download_box, save_button,   # mainContainer
         GDrive_button, export_button, import_button, notification_popup         # sideContainer
     ]
     factory.close(all_widgets, class_names=['hide'], delay=0.8)
