@@ -67,6 +67,21 @@ FILE_STRUCTURE = {
 
 
 # =================== UTILITY FUNCTIONS ====================
+def reinitialize_paths(base_path):
+    """Re-initializes global path variables based on a new home directory."""
+    global HOME, SCR_PATH, SETTINGS_PATH, VENV_PATH, MODULES_FOLDER
+    HOME = base_path
+    SCR_PATH = HOME / 'ANXETY'
+    SETTINGS_PATH = SCR_PATH / 'settings.json'
+    VENV_PATH = HOME / 'venv'
+    MODULES_FOLDER = SCR_PATH / "modules"
+
+    os.environ.update({
+        'home_path': str(HOME),
+        'scr_path': str(SCR_PATH),
+        'venv_path': str(VENV_PATH),
+        'settings_path': str(SETTINGS_PATH)
+    })
 
 def _install_deps() -> bool:
     """Check if all required dependencies are installed (aria2 and gdown)."""
@@ -252,11 +267,11 @@ async def main_async(args=None):
     env = detect_environment()
     user, repo = parse_fork_arg(args.fork)   # GitHub: user/repo
 
-    # Dynamically set HOME path for Lightning.ai
-    global HOME
+    # Dynamically set HOME path for different environments
     if env == 'Lightning.ai':
-        HOME = Path('/teamspace/studios/this_studio')
-        os.environ['home_path'] = str(HOME)
+        reinitialize_paths(Path('/teamspace/studios/this_studio'))
+    elif env == 'Google Colab':
+        reinitialize_paths(Path('/content'))
 
     # download scripts files
     if not args.skip_download:
