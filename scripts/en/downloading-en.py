@@ -1,4 +1,4 @@
-# ~ download.py | by ANXETY ~
+# ~ download.py | by ANXETY - FIXED VERSION ~
 
 from webui_utils import handle_setup_timer    # WEBUI
 from Manager import m_download, m_clone       # Every Download | Clone
@@ -13,6 +13,7 @@ from datetime import timedelta
 from pathlib import Path
 import subprocess
 import requests
+import tempfile
 import zipfile
 import shutil
 import shlex
@@ -62,16 +63,75 @@ def install_dependencies(commands):
     """Run a list of installation commands."""
     for cmd in commands:
         try:
-            subprocess.run(shlex.split(cmd), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except Exception:
-            pass
+            subprocess.run(shlex.split(cmd), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=300)
+        except (subprocess.TimeoutExpired, Exception) as e:
+            print(f"Warning: Command failed: {cmd} - {e}")
+
+def download_with_retry(url, destination, max_retries=3, chunk_size=8192):
+    """FIXED: Download large files with retry logic and progress."""
+    for attempt in range(max_retries):
+        try:
+            print(f"Downloading {Path(url).name} (attempt {attempt + 1}/{max_retries})...")
+            
+            # Check if partial file exists
+            temp_file = Path(f"{destination}.part")
+            resume_header = {}
+            if temp_file.exists():
+                resume_header = {'Range': f'bytes={temp_file.stat().st_size}-'}
+                print(f"Resuming download from {temp_file.stat().st_size} bytes")
+            
+            response = requests.get(url, headers=resume_header, stream=True, timeout=30)
+            response.raise_for_status()
+            
+            total_size = int(response.headers.get('content-length', 0))
+            if 'content-range' in response.headers:
+                # Resume mode
+                total_size = int(response.headers['content-range'].split('/')[-1])
+            
+            mode = 'ab' if temp_file.exists() else 'wb'
+            downloaded = temp_file.stat().st_size if temp_file.exists() else 0
+            
+            with open(temp_file, mode) as f:
+                for chunk in response.iter_content(chunk_size=chunk_size):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_size > 0:
+                            percent = (downloaded / total_size) * 100
+                            print(f"\rProgress: {percent:.1f}% ({downloaded}/{total_size} bytes)", end='', flush=True)
+            
+            print()  # New line after progress
+            
+            # Move completed file to final destination
+            temp_file.rename(destination)
+            return True
+            
+        except requests.RequestException as e:
+            print(f"Download attempt {attempt + 1} failed: {e}")
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)  # Exponential backoff
+            else:
+                # Cleanup on final failure
+                if temp_file.exists():
+                    temp_file.unlink()
+                return False
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            if temp_file.exists():
+                temp_file.unlink()
+            return False
+    
+    return False
 
 def setup_venv(url):
-    """Customize the virtual environment using the specified URL."""
+    """FIXED: Customize the virtual environment with better error handling."""
     CD(HOME)
     fn = Path(url).name
+    destination = HOME / fn
 
-    m_download(f"{url} {HOME} {fn}")
+    # FIXED: Use improved download function
+    if not download_with_retry(url, destination):
+        raise RuntimeError(f"Failed to download {url} after multiple attempts")
 
     # Install dependencies based on environment
     install_commands = ['sudo apt-get -y install lz4 pv']
@@ -83,13 +143,31 @@ def setup_venv(url):
 
     install_dependencies(install_commands)
 
-    # Unpack and clean
-    ipySys(f"pv {fn} | lz4 -d | tar xf -")
-    Path(fn).unlink()
+    # FIXED: Better extraction with error handling
+    try:
+        print("Extracting venv archive...")
+        result = subprocess.run(
+            f"pv {fn} | lz4 -d | tar xf -",
+            shell=True,
+            cwd=HOME,
+            capture_output=True,
+            text=True,
+            timeout=600  # 10 minute timeout
+        )
+        
+        if result.returncode != 0:
+            raise RuntimeError(f"Extraction failed: {result.stderr}")
+            
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("Extraction timed out")
+    finally:
+        # Always cleanup downloaded file
+        if destination.exists():
+            destination.unlink()
 
     BIN = str(VENV / 'bin')
     PYTHON_VERSION = '3.11' if UI == 'Classic' else '3.10'
-    PKG = str(VENV / f'lib/{PYTHON_VERSION }/site-packages')
+    PKG = str(VENV / f'lib/{PYTHON_VERSION}/site-packages')
 
     osENV.update({
         'PYTHONWARNINGS': 'ignore',
@@ -103,11 +181,13 @@ def install_packages(install_lib):
     for index, (package, install_cmd) in enumerate(install_lib.items(), start=1):
         print(f"\r[{index}/{len(install_lib)}] {COL.G}>>{COL.X} Installing {COL.Y}{package}{COL.X}..." + ' ' * 35, end='')
         try:
-            result = subprocess.run(install_cmd, shell=True, capture_output=True)
+            result = subprocess.run(install_cmd, shell=True, capture_output=True, timeout=300)
             if result.returncode != 0:
-                print(f"\n{COL.R}Error installing {package}{COL.X}")
-        except Exception:
-            pass
+                print(f"\n{COL.R}Error installing {package}: {result.stderr.decode()[:100]}{COL.X}")
+        except subprocess.TimeoutExpired:
+            print(f"\n{COL.R}Timeout installing {package}{COL.X}")
+        except Exception as e:
+            print(f"\n{COL.R}Failed to install {package}: {e}{COL.X}")
 
 # Check and install dependencies
 if not js.key_exists(SETTINGS_PATH, 'ENVIRONMENT.install_deps', True):
@@ -152,11 +232,15 @@ if venv_needs_reinstall:
     venv_url, py_version = venv_config.get(current_ui, venv_config['default'])
 
     print(f"♻️ Installing VENV {py_version}, this will take some time...")
-    setup_venv(venv_url)
-    clear_output()
-
-    # Update latest UI version...
-    js.update(SETTINGS_PATH, 'WEBUI.latest', current_ui)
+    try:
+        setup_venv(venv_url)
+        clear_output()
+        # Update latest UI version...
+        js.update(SETTINGS_PATH, 'WEBUI.latest', current_ui)
+    except Exception as e:
+        print(f"Failed to setup venv: {e}")
+        print("Please check your internet connection and try again.")
+        raise
 
 
 # =================== loading settings V5 ==================
@@ -186,15 +270,18 @@ if UI in ['A1111', 'SD-UX']:
         print('🚚 Unpacking ADetailer model cache...')
 
         name_zip = 'hf_cache_adetailer'
-        chache_url = 'https://huggingface.co/NagisaNao/ANXETY/resolve/main/hf_cache_adetailer.zip'
+        cache_url = 'https://huggingface.co/NagisaNao/ANXETY/resolve/main/hf_cache_adetailer.zip'
 
         zip_path = HOME / f"{name_zip}.zip"
         parent_cache_dir = os.path.dirname(cache_path)
         os.makedirs(parent_cache_dir, exist_ok=True)
 
-        m_download(f"{chache_url} {HOME} {name_zip}")
-        ipySys(f"unzip -q -o {zip_path} -d {parent_cache_dir} && rm -rf {zip_path}")
-        clear_output()
+        try:
+            m_download(f"{cache_url} {HOME} {name_zip}")
+            ipySys(f"unzip -q -o {zip_path} -d {parent_cache_dir} && rm -rf {zip_path}")
+            clear_output()
+        except Exception as e:
+            print(f"Warning: Failed to setup ADetailer cache: {e}")
 
 start_timer = js.read(SETTINGS_PATH, 'ENVIRONMENT.start_timer')
 
@@ -202,12 +289,16 @@ if not os.path.exists(WEBUI):
     start_install = time.time()
     print(f"⌚ Unpacking Stable Diffusion... | WEBUI: {COL.B}{UI}{COL.X}", end='')
 
-    ipyRun('run', f"{SCRIPTS}/webui-installer.py")
-    handle_setup_timer(WEBUI, start_timer)		# Setup timer (for timer-extensions)
+    try:
+        ipyRun('run', f"{SCRIPTS}/webui-installer.py")
+        handle_setup_timer(WEBUI, start_timer)		# Setup timer (for timer-extensions)
 
-    install_time = time.time() - start_install
-    minutes, seconds = divmod(int(install_time), 60)
-    print(f"\r🚀 Unpacking {COL.B}{UI}{COL.X} complete! {minutes:02}:{seconds:02} ⚡" + ' '*25)
+        install_time = time.time() - start_install
+        minutes, seconds = divmod(int(install_time), 60)
+        print(f"\r🚀 Unpacking {COL.B}{UI}{COL.X} complete! {minutes:02}:{seconds:02} ⚡" + ' '*25)
+    except Exception as e:
+        print(f"\rFailed to install WebUI: {e}")
+        raise
 
 else:
     print(f"🔧 Current WebUI: {COL.B}{UI}{COL.X}")
@@ -221,158 +312,176 @@ else:
 if latest_webui or latest_extensions:
     action = 'WebUI and Extensions' if latest_webui and latest_extensions else ('WebUI' if latest_webui else 'Extensions')
     print(f"⌚️ Update {action}...", end='')
-    with capture.capture_output():
-        ipySys('git config --global user.email "you@example.com"')
-        ipySys('git config --global user.name "Your Name"')
+    try:
+        with capture.capture_output():
+            ipySys('git config --global user.email "you@example.com"')
+            ipySys('git config --global user.name "Your Name"')
 
-        ## Update Webui
-        if latest_webui:
-            CD(WEBUI)
+            ## Update Webui
+            if latest_webui:
+                CD(WEBUI)
+                ipySys('git stash push --include-untracked')
+                ipySys('git pull --rebase')
+                ipySys('git stash pop')
 
-            ipySys('git stash push --include-untracked')
-            ipySys('git pull --rebase')
-            ipySys('git stash pop')
+            ## Update extensions
+            if latest_extensions:
+                extensions_dir = Path(WEBUI) / 'extensions'
+                if extensions_dir.exists():
+                    for entry in extensions_dir.iterdir():
+                        if entry.is_dir():
+                            try:
+                                subprocess.run(['git', 'reset', '--hard'], cwd=entry, 
+                                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
+                                subprocess.run(['git', 'pull'], cwd=entry, 
+                                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+                            except (subprocess.TimeoutExpired, Exception):
+                                print(f"Warning: Failed to update {entry.name}")
 
-        ## Update extensions
-        if latest_extensions:
-            for entry in os.listdir(f"{WEBUI}/extensions"):
-                dir_path = f"{WEBUI}/extensions/{entry}"
-                if os.path.isdir(dir_path):
-                    subprocess.run(['git', 'reset', '--hard'], cwd=dir_path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    subprocess.run(['git', 'pull'], cwd=dir_path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-    print(f"\r✨ Update {action} Completed!")
+        print(f"\r✨ Update {action} Completed!")
+    except Exception as e:
+        print(f"\rWarning: Update failed: {e}")
 
 
 ## Version switching
 if commit_hash:
     print('🔄 Switching to the specified version...', end='')
-    with capture.capture_output():
-        CD(WEBUI)
-        ipySys('git config --global user.email "you@example.com"')
-        ipySys('git config --global user.name "Your Name"')
-        ipySys('git reset --hard {commit_hash}')
-        ipySys('git pull origin {commit_hash}')    # Get last changes in branch
-    print(f"\r🔄 Switch complete! Current commit: {COL.B}{commit_hash}{COL.X}")
+    try:
+        with capture.capture_output():
+            CD(WEBUI)
+            ipySys('git config --global user.email "you@example.com"')
+            ipySys('git config --global user.name "Your Name"')
+            ipySys(f'git reset --hard {commit_hash}')
+            ipySys(f'git pull origin {commit_hash}')    # Get last changes in branch
+        print(f"\r🔄 Switch complete! Current commit: {COL.B}{commit_hash}{COL.X}")
+    except Exception as e:
+        print(f"\rWarning: Version switch failed: {e}")
 
 
 # === Google Drive Mounting | EXCLUSIVE for Colab ===
-from google.colab import drive
-mountGDrive = js.read(SETTINGS_PATH, 'mountGDrive')  # Mount/unmount flag
+# FIXED: Conditional import and better error handling
+try:
+    from google.colab import drive
+    IN_COLAB = True
+except ImportError:
+    IN_COLAB = False
 
-# Configuration
-GD_BASE = "/content/drive/MyDrive/sdAIgen"
-SYMLINK_CONFIG = [
-    {   # model
-        'local_dir': model_dir,
-        'gdrive_subpath': 'Checkpoints',
-    },
-    {   # vae
-        'local_dir': vae_dir,
-        'gdrive_subpath': 'VAE',
-    },
-    {   # lora
-        'local_dir': lora_dir,
-        'gdrive_subpath': 'Lora',
-    }
-]
+if IN_COLAB:
+    mountGDrive = js.read(SETTINGS_PATH, 'mountGDrive')  # Mount/unmount flag
 
-def create_symlink(src_path, gdrive_path, log=False):
-    """Create symbolic link with content migration and cleanup"""
-    try:
-        src_exists = os.path.exists(src_path)
-        is_real_dir = src_exists and os.path.isdir(src_path) and not os.path.islink(src_path)
+    # Configuration
+    GD_BASE = "/content/drive/MyDrive/sdAIgen"
+    SYMLINK_CONFIG = [
+        {   # model
+            'local_dir': model_dir,
+            'gdrive_subpath': 'Checkpoints',
+        },
+        {   # vae
+            'local_dir': vae_dir,
+            'gdrive_subpath': 'VAE',
+        },
+        {   # lora
+            'local_dir': lora_dir,
+            'gdrive_subpath': 'Lora',
+        }
+    ]
 
-        # Handle real directory migration
-        if is_real_dir and os.path.exists(gdrive_path):
-            for item in os.listdir(src_path):
-                src_item = os.path.join(src_path, item)
-                dst_item = os.path.join(gdrive_path, item)
-
-                if os.path.exists(dst_item):
-                    shutil.rmtree(dst_item) if os.path.isdir(dst_item) else os.remove(dst_item)
-                shutil.move(src_item, dst_item)
-
-            shutil.rmtree(src_path)
-            if log:
-                print(f"Moved contents from {src_path} to {gdrive_path}")
-
-        # Cleanup existing path
-        if os.path.exists(src_path) and not is_real_dir:
-            if os.path.islink(src_path):
-                os.unlink(src_path)
-            else:
-                os.remove(src_path)
-
-        # Create new symlink
-        if not os.path.exists(src_path):
-            os.symlink(gdrive_path, src_path)
-            if log:
-                print(f"Created symlink: {src_path} → {gdrive_path}")
-
-    except Exception as e:
-        print(f"Error processing {src_path}: {str(e)}")
-
-def handle_gdrive(mount_flag, log=False):
-    """Main handler for Google Drive mounting and symlink management"""
-    if mount_flag:
-        if os.path.exists("/content/drive/MyDrive"):
-            print("🎉 Google Drive is connected~")
-        else:
-            try:
-                print("⏳ Mounting Google Drive...", end='')
-                with capture.capture_output():
-                    drive.mount('/content/drive')
-                print("\r🚀 Google Drive mounted successfully!")
-            except Exception as e:
-                clear_output()
-                print(f"❌ Mounting failed: {str(e)}\n")
-                return
-
+    def create_symlink(src_path, gdrive_path, log=False):
+        """Create symbolic link with content migration and cleanup"""
         try:
-            # Create base directory structure
-            os.makedirs(GD_BASE, exist_ok=True)
-            for cfg in SYMLINK_CONFIG:
-                path = os.path.join(GD_BASE, cfg['gdrive_subpath'])
-                os.makedirs(path, exist_ok=True)
-            print(f"📁 → {GD_BASE}")
+            src_exists = os.path.exists(src_path)
+            is_real_dir = src_exists and os.path.isdir(src_path) and not os.path.islink(src_path)
 
-            # Create symlinks
-            for cfg in SYMLINK_CONFIG:
-                src = os.path.join(cfg['local_dir'], 'GDrive')
-                dst = os.path.join(GD_BASE, cfg['gdrive_subpath'])
-                create_symlink(src, dst, log)
+            # Handle real directory migration
+            if is_real_dir and os.path.exists(gdrive_path):
+                for item in os.listdir(src_path):
+                    src_item = os.path.join(src_path, item)
+                    dst_item = os.path.join(gdrive_path, item)
 
-            print("✅ Symlinks created successfully!")
+                    if os.path.exists(dst_item):
+                        shutil.rmtree(dst_item) if os.path.isdir(dst_item) else os.remove(dst_item)
+                    shutil.move(src_item, dst_item)
+
+                shutil.rmtree(src_path)
+                if log:
+                    print(f"Moved contents from {src_path} to {gdrive_path}")
+
+            # Cleanup existing path
+            if os.path.exists(src_path) and not is_real_dir:
+                if os.path.islink(src_path):
+                    os.unlink(src_path)
+                else:
+                    os.remove(src_path)
+
+            # Create new symlink
+            if not os.path.exists(src_path):
+                os.symlink(gdrive_path, src_path)
+                if log:
+                    print(f"Created symlink: {src_path} → {gdrive_path}")
 
         except Exception as e:
-            print(f"❌ Setup error: {str(e)}\n")
+            print(f"Error processing {src_path}: {str(e)}")
 
-        # Trashing
-        cmd = f"find {GD_BASE} -type d -name .ipynb_checkpoints -exec rm -rf {{}} +"
-        subprocess.run(shlex.split(cmd), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    def handle_gdrive(mount_flag, log=False):
+        """Main handler for Google Drive mounting and symlink management"""
+        if mount_flag:
+            if os.path.exists("/content/drive/MyDrive"):
+                print("🎉 Google Drive is connected~")
+            else:
+                try:
+                    print("⏳ Mounting Google Drive...", end='')
+                    with capture.capture_output():
+                        drive.mount('/content/drive')
+                    print("\r🚀 Google Drive mounted successfully!")
+                except Exception as e:
+                    clear_output()
+                    print(f"❌ Mounting failed: {str(e)}\n")
+                    return
 
-    else:
-        if os.path.exists("/content/drive/MyDrive"):
             try:
-                print("⏳ Unmounting Google Drive...", end='')
-                with capture.capture_output():
-                    drive.flush_and_unmount()
-                    os.system("rm -rf /content/drive")
-                print("\r✅ Google Drive unmounted and cleaned!")
-
-                # Remove symlinks
+                # Create base directory structure
+                os.makedirs(GD_BASE, exist_ok=True)
                 for cfg in SYMLINK_CONFIG:
-                    link_path = os.path.join(cfg['local_dir'], 'GDrive')
-                    if os.path.islink(link_path):
-                        os.unlink(link_path)
+                    path = os.path.join(GD_BASE, cfg['gdrive_subpath'])
+                    os.makedirs(path, exist_ok=True)
+                print(f"📁 → {GD_BASE}")
 
-                print("🗑️ Symlinks removed successfully!")
+                # Create symlinks
+                for cfg in SYMLINK_CONFIG:
+                    src = os.path.join(cfg['local_dir'], 'GDrive')
+                    dst = os.path.join(GD_BASE, cfg['gdrive_subpath'])
+                    create_symlink(src, dst, log)
+
+                print("✅ Symlinks created successfully!")
 
             except Exception as e:
-                print(f"❌ Unmount error: {str(e)}\n")
+                print(f"❌ Setup error: {str(e)}\n")
 
-handle_gdrive(mountGDrive)
+            # Trashing
+            cmd = f"find {GD_BASE} -type d -name .ipynb_checkpoints -exec rm -rf {{}} +"
+            subprocess.run(shlex.split(cmd), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        else:
+            if os.path.exists("/content/drive/MyDrive"):
+                try:
+                    print("⏳ Unmounting Google Drive...", end='')
+                    with capture.capture_output():
+                        drive.flush_and_unmount()
+                        os.system("rm -rf /content/drive")
+                    print("\r✅ Google Drive unmounted and cleaned!")
+
+                    # Remove symlinks
+                    for cfg in SYMLINK_CONFIG:
+                        link_path = os.path.join(cfg['local_dir'], 'GDrive')
+                        if os.path.islink(link_path):
+                            os.unlink(link_path)
+
+                    print("🗑️ Symlinks removed successfully!")
+
+                except Exception as e:
+                    print(f"❌ Unmount error: {str(e)}\n")
+
+    handle_gdrive(mountGDrive)
 
 
 # ======================= DOWNLOADING ======================
@@ -388,8 +497,14 @@ def handle_errors(func):
 # Get XL or 1.5 models list
 ## model_list | vae_list | controlnet_list
 model_files = '_xl-models-data.py' if XL_models else '_models-data.py'
-with open(f"{SCRIPTS}/{model_files}") as f:
-    exec(f.read())
+try:
+    with open(f"{SCRIPTS}/{model_files}") as f:
+        exec(f.read())
+except Exception as e:
+    print(f"Warning: Could not load model data: {e}")
+    model_list = {}
+    vae_list = {}
+    controlnet_list = {}
 
 ## Downloading model and stuff | oh~ Hey! If you're freaked out by that code too, don't worry, me too!
 print('📦 Downloading models and stuff...', end='')
@@ -488,8 +603,11 @@ def download(line):
             except Exception as e:
                 print(f"\n> Download error: {e}")
         else:
-            url, dst_dir, file_name = url.split()
-            manual_download(url, dst_dir, file_name)
+            parts = url.split()
+            if len(parts) >= 3:
+                manual_download(parts[0], parts[1], parts[2])
+            else:
+                print(f"Invalid download format: {url}")
 
 @handle_errors
 def manual_download(url, dst_dir, file_name=None, prefix=None):
@@ -497,7 +615,13 @@ def manual_download(url, dst_dir, file_name=None, prefix=None):
     image_url, image_name = None, None
 
     if 'civitai' in url:
-        api = CivitAiAPI(civitai_token)
+        # FIXED: Check token before using API
+        token = js.read(SETTINGS_PATH, 'WIDGETS.civitai_token') or ''
+        if not token:
+            print(f"Warning: CivitAI token required for {url}")
+            return
+            
+        api = CivitAiAPI(token)
         if not (data := api.validate_download(url, file_name)):
             return
 
@@ -521,9 +645,11 @@ def manual_download(url, dst_dir, file_name=None, prefix=None):
 
 ''' SubModels - Added URLs '''
 
-# Separation of merged numbers
 def _parse_selection_numbers(num_str, max_num):
     """Split a string of numbers into unique integers, considering max_num as the upper limit."""
+    if not num_str:
+        return []
+        
     num_str = num_str.replace(',', ' ').strip()
     unique_numbers = set()
     max_length = len(str(max_num))
@@ -665,27 +791,35 @@ def process_file_downloads(file_urls, additional_lines=None):
     for source in file_urls:
         if source.startswith('http'):
             try:
-                response = requests.get(_clean_url(source))
+                response = requests.get(_clean_url(source), timeout=30)
                 response.raise_for_status()
                 lines.extend(response.text.splitlines())
-            except requests.RequestException:
+            except requests.RequestException as e:
+                print(f"Warning: Could not fetch {source}: {e}")
                 continue
         else:
             try:
                 with open(source, 'r', encoding='utf-8') as f:
                     lines.extend(f.readlines())
             except FileNotFoundError:
+                print(f"Warning: File not found: {source}")
+                continue
+            except Exception as e:
+                print(f"Warning: Could not read {source}: {e}")
                 continue
 
     return _process_lines(lines)
 
 # File URLs processing
-urls_sources = (Model_url, Vae_url, LoRA_url, Embedding_url, Extensions_url, ADetailer_url)
-file_urls = [f"{f}.txt" if not f.endswith('.txt') else f for f in custom_file_urls.replace(',', '').split()] if custom_file_urls else []
+try:
+    urls_sources = (Model_url, Vae_url, LoRA_url, Embedding_url, Extensions_url, ADetailer_url)
+    file_urls = [f"{f}.txt" if not f.endswith('.txt') else f for f in custom_file_urls.replace(',', '').split()] if custom_file_urls else []
 
-# p -> prefix ; u -> url | Remember: don't touch the prefix!
-prefixed_urls = [f"{p}:{u}" for p, u in zip(PREFIX_MAP, urls_sources) if u for u in u.replace(',', '').split()]
-line += ', '.join(prefixed_urls + [process_file_downloads(file_urls, empowerment_output)])
+    # p -> prefix ; u -> url | Remember: don't touch the prefix!
+    prefixed_urls = [f"{p}:{u}" for p, u in zip(PREFIX_MAP, urls_sources) if u for u in u.replace(',', '').split()]
+    line += ', '.join(prefixed_urls + [process_file_downloads(file_urls, empowerment_output)])
+except NameError as e:
+    print(f"Warning: Some download variables not defined: {e}")
 
 if detailed_download == 'on':
     print(f"\n\n{COL.Y}# ====== Detailed Download ====== #\n{COL.X}")
@@ -697,37 +831,43 @@ else:
 
 print('\r🏁 Download Complete!' + ' '*15)
 
-
 ## Install of Custom extensions
 extension_type = 'nodes' if UI == 'ComfyUI' else 'extensions'
 
 if extension_repo:
     print(f"✨ Installing custom {extension_type}...", end='')
-    with capture.capture_output():
-        for repo_url, repo_name in extension_repo:
-            m_clone(f"{repo_url} {extension_dir} {repo_name}")
-    print(f"\r📦 Installed '{len(extension_repo)}' custom {extension_type}!")
-
+    try:
+        with capture.capture_output():
+            for repo_url, repo_name in extension_repo:
+                m_clone(f"{repo_url} {extension_dir} {repo_name}")
+        print(f"\r📦 Installed '{len(extension_repo)}' custom {extension_type}!")
+    except Exception as e:
+        print(f"\rWarning: Some extensions failed to install: {e}")
 
 # === SPECIAL ===
 ## Sorting models `bbox` and `segm` | Only ComfyUI
 if UI == 'ComfyUI':
-    dirs = {'segm': '-seg.pt', 'bbox': None}
-    for d in dirs:
-        os.makedirs(os.path.join(adetailer_dir, d), exist_ok=True)
+    try:
+        dirs = {'segm': '-seg.pt', 'bbox': None}
+        for d in dirs:
+            os.makedirs(os.path.join(adetailer_dir, d), exist_ok=True)
 
-    for filename in os.listdir(adetailer_dir):
-        src = os.path.join(adetailer_dir, filename)
+        for filename in os.listdir(adetailer_dir):
+            src = os.path.join(adetailer_dir, filename)
 
-        if os.path.isfile(src) and filename.endswith('.pt'):
-            dest_dir = 'segm' if filename.endswith('-seg.pt') else 'bbox'
-            dest = os.path.join(adetailer_dir, dest_dir, filename)
+            if os.path.isfile(src) and filename.endswith('.pt'):
+                dest_dir = 'segm' if filename.endswith('-seg.pt') else 'bbox'
+                dest = os.path.join(adetailer_dir, dest_dir, filename)
 
-            if os.path.exists(dest):
-                os.remove(src)
-            else:
-                shutil.move(src, dest)
-
+                if os.path.exists(dest):
+                    os.remove(src)
+                else:
+                    shutil.move(src, dest)
+    except Exception as e:
+        print(f"Warning: Failed to sort ADetailer models: {e}")
 
 ## List Models and stuff
-ipyRun('run', f"{SCRIPTS}/download-result.py")
+try:
+    ipyRun('run', f"{SCRIPTS}/download-result.py")
+except Exception as e:
+    print(f"Warning: Could not display download results: {e}")
