@@ -381,11 +381,11 @@ if __name__ == '__main__':
     packages_to_fix = [
         "numpy==1.26.4",
         "onnx==1.15.0",
-        "onnxruntime-gpu==1.17.1"
+        "onnxruntime==1.15.0"
     ]
     
     for package in packages_to_fix:
-        subprocess.run([sys.executable, '-m', 'pip', 'install', package], 
+        subprocess.run([sys.executable, '-m', 'pip', 'install', '--force-reinstall', package], 
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
     print("✅ Library versions checked and fixed.")
