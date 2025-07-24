@@ -1,4 +1,4 @@
-# ~ setup.py | by ANXETY ~ (FIXED VERSION)
+# ~ setup.py | by ANXETY - FIXED VERSION ~
 
 from IPython.display import display, HTML, clear_output
 from typing import Dict, List, Tuple, Optional, Union
@@ -34,7 +34,7 @@ os.environ.update({
     'settings_path': str(SETTINGS_PATH)
 })
 
-# GitHub configuration - FIXED: Updated to correct repository
+# GitHub configuration - FIXED: Correct repository
 DEFAULT_USER = 'anxety-solo'
 DEFAULT_REPO = 'sdAIgen'
 DEFAULT_BRANCH = 'main'
@@ -64,10 +64,6 @@ FILE_STRUCTURE = {
         ]
     }
 }
-
-# FIXED: Add retry configuration
-MAX_RETRIES = 3
-RETRY_DELAY = 2
 
 
 # =================== UTILITY FUNCTIONS ====================
@@ -108,23 +104,19 @@ def _get_start_timer() -> int:
 
 def save_env_to_json(data: dict, filepath: Path) -> None:
     """Save environment data to JSON file, merging with existing content."""
-    try:
-        filepath.parent.mkdir(parents=True, exist_ok=True)
+    filepath.parent.mkdir(parents=True, exist_ok=True)
 
-        # Load existing data if file exists
-        existing_data = {}
-        if filepath.exists():
-            try:
-                existing_data = json.loads(filepath.read_text())
-            except (json.JSONDecodeError, OSError):
-                print("Warning: Could not read existing settings, creating new file")
+    # Load existing data if file exists
+    existing_data = {}
+    if filepath.exists():
+        try:
+            existing_data = json.loads(filepath.read_text())
+        except (json.JSONDecodeError, OSError):
+            pass
 
-        # Merge new data with existing
-        merged_data = {**existing_data, **data}
-        filepath.write_text(json.dumps(merged_data, indent=4))
-    except Exception as e:
-        print(f"Error saving settings: {e}")
-        raise
+    # Merge new data with existing
+    merged_data = {**existing_data, **data}
+    filepath.write_text(json.dumps(merged_data, indent=4))
 
 
 # =================== MODULE MANAGEMENT ====================
@@ -134,7 +126,7 @@ def _clear_module_cache(modules_folder = None):
     target_folder = Path(modules_folder) if modules_folder else MODULES_FOLDER
     target_folder = target_folder.resolve()   # Full absolute path
 
-    # FIXED: More careful module cleanup to avoid breaking other code
+    # FIXED: More conservative cache clearing to avoid breaking other modules
     modules_to_remove = []
     for module_name, module in sys.modules.items():
         if hasattr(module, "__file__") and module.__file__:
@@ -145,7 +137,7 @@ def _clear_module_cache(modules_folder = None):
             except (ValueError, RuntimeError, OSError):
                 continue
 
-    # Remove modules safely
+    # Remove collected modules
     for module_name in modules_to_remove:
         try:
             del sys.modules[module_name]
@@ -173,24 +165,7 @@ def detect_environment():
     for var, name in SUPPORTED_ENVS.items():
         if var in os.environ:
             return name
-    
-    # FIXED: Better error message and fallback
-    print("Warning: Unknown environment detected. Supported environments:")
-    for var, name in SUPPORTED_ENVS.items():
-        print(f"  - {name} (env var: {var})")
-    
-    # Try to detect common paths as fallback
-    if '/content' in str(Path.cwd()):
-        print("Detected Google Colab based on path")
-        return 'Google Colab'
-    elif '/kaggle' in str(Path.cwd()):
-        print("Detected Kaggle based on path")
-        return 'Kaggle'
-    elif '/teamspace' in str(Path.cwd()):
-        print("Detected Lightning.ai based on path")
-        return 'Lightning.ai'
-    
-    raise EnvironmentError(f"Unsupported environment. Please run in one of: {', '.join(SUPPORTED_ENVS.values())}")
+    raise EnvironmentError(f"Unsupported environment. Supported: {', '.join(SUPPORTED_ENVS.values())}")
 
 def parse_fork_arg(fork_arg):
     """Parse fork argument into user/repo."""
@@ -250,86 +225,83 @@ def generate_file_list(structure: Dict, base_url: str, lang: str) -> List[Tuple[
 
     return walk(structure, [])
 
-async def download_file_with_retry(session: aiohttp.ClientSession, url: str, path: Path) -> Tuple[bool, str, Path, Optional[str]]:
-    """Download and save single file with retry logic and error handling."""
-    for attempt in range(MAX_RETRIES):
+async def download_file(session: aiohttp.ClientSession, url: str, path: Path, max_retries: int = 3) -> Tuple[bool, str, Path, Optional[str]]:
+    """Download and save single file with error handling and retry logic."""
+    for attempt in range(max_retries):
         try:
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                if resp.status == 404:
-                    return (False, url, path, f"File not found (404): {url}")
                 resp.raise_for_status()
-                
-                # FIXED: Ensure parent directory exists and handle write errors
                 path.parent.mkdir(parents=True, exist_ok=True)
-                content = await resp.read()
                 
-                # Write to temporary file first, then rename for atomic operation
+                # FIXED: Atomic write to avoid partial files
                 temp_path = path.with_suffix(path.suffix + '.tmp')
-                try:
-                    temp_path.write_bytes(content)
-                    temp_path.rename(path)
-                    return (True, url, path, None)
-                except OSError as e:
-                    if temp_path.exists():
-                        temp_path.unlink()
-                    raise e
-                    
+                content = await resp.read()
+                temp_path.write_bytes(content)
+                temp_path.rename(path)
+                
+                return (True, url, path, None)
+                
         except asyncio.TimeoutError:
-            error_msg = f"Timeout (attempt {attempt + 1}/{MAX_RETRIES})"
+            error_msg = f"Timeout error (attempt {attempt + 1}/{max_retries})"
+            if attempt == max_retries - 1:
+                return (False, url, path, error_msg)
+            await asyncio.sleep(2 ** attempt)  # Exponential backoff
+            
         except aiohttp.ClientResponseError as e:
-            error_msg = f"HTTP error {e.status}: {e.message} (attempt {attempt + 1}/{MAX_RETRIES})"
+            error_msg = f"HTTP error {e.status}: {e.message}"
+            if e.status >= 500 and attempt < max_retries - 1:
+                await asyncio.sleep(2 ** attempt)  # Retry server errors
+                continue
+            return (False, url, path, error_msg)
+            
         except Exception as e:
-            error_msg = f"Error: {str(e)} (attempt {attempt + 1}/{MAX_RETRIES})"
-        
-        # Wait before retry (except on last attempt)
-        if attempt < MAX_RETRIES - 1:
-            await asyncio.sleep(RETRY_DELAY * (attempt + 1))  # Exponential backoff
-    
-    return (False, url, path, error_msg)
+            error_msg = f"Error: {str(e)}"
+            if attempt == max_retries - 1:
+                return (False, url, path, error_msg)
+            await asyncio.sleep(2 ** attempt)
+
+    return (False, url, path, "Max retries exceeded")
 
 async def download_files_async(lang, fork_user, fork_repo, branch, log_errors):
-    """Main download executor with error logging and retry logic."""
+    """Main download executor with error logging and improved reliability."""
     base_url = f"{BASE_GITHUB_URL}/{fork_user}/{fork_repo}/{branch}"
     file_list = generate_file_list(FILE_STRUCTURE, base_url, lang)
 
-    # FIXED: Better session configuration and connection limits
+    # FIXED: Better connection management
     connector = aiohttp.TCPConnector(limit=10, limit_per_host=5)
     timeout = aiohttp.ClientTimeout(total=60, connect=10)
     
     async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
-        tasks = [download_file_with_retry(session, url, path) for url, path in file_list]
+        tasks = [download_file(session, url, path) for url, path in file_list]
         errors = []
-        success_count = 0
+        successful = 0
 
         for future in tqdm(asyncio.as_completed(tasks), total=len(tasks),
                           desc="Downloading files", unit="file"):
             success, url, path, error = await future
             if success:
-                success_count += 1
+                successful += 1
             else:
                 errors.append((url, path, error))
 
         clear_output()
         
-        # FIXED: Better error reporting and success feedback
-        print(f"✅ Downloaded {success_count}/{len(file_list)} files successfully")
+        print(f"Downloaded {successful}/{len(file_list)} files successfully")
 
         if errors:
-            print(f"❌ {len(errors)} files failed to download")
+            print(f"\n{len(errors)} files failed to download")
             if log_errors:
-                print("\nDetailed error log:")
-                for url, path, error in errors:
-                    print(f"URL: {url}")
-                    print(f"Path: {path}")
-                    print(f"Error: {error}\n")
-            else:
-                print("Use --log flag to see detailed error information")
+                print("\nErrors occurred during download:")
+                for url, path, error in errors[:10]:  # Limit error output
+                    print(f"URL: {url}\nPath: {path}\nError: {error}\n")
+                if len(errors) > 10:
+                    print(f"... and {len(errors) - 10} more errors")
             
-            # Don't fail completely if only some files failed
-            if len(errors) < len(file_list) / 2:  # Less than 50% failed
-                print("⚠️  Continuing with partial download (more than 50% succeeded)")
-            else:
-                raise RuntimeError(f"Too many download failures: {len(errors)}/{len(file_list)}")
+            # FIXED: Don't continue if critical files failed
+            critical_files = ['json_utils.py', '_season.py']
+            critical_errors = [e for e in errors if any(cf in str(e[1]) for cf in critical_files)]
+            if critical_errors:
+                raise RuntimeError(f"Critical files failed to download: {[str(e[1]) for e in critical_errors]}")
 
 # ===================== MAIN EXECUTION =====================
 
@@ -348,28 +320,26 @@ async def main_async(args=None):
         env = detect_environment()
         user, repo = parse_fork_arg(args.fork)   # GitHub: user/repo
 
-        # FIXED: More robust path detection for different environments
+        # FIXED: Better path handling for different environments
         if env == 'Lightning.ai':
-            # Try common Lightning.ai paths
+            # Check multiple possible paths for Lightning.ai
             possible_paths = [
                 Path('/teamspace/studios/this_studio'),
-                Path('/teamspace/repositories'),
-                Path.home()
+                Path('/teamspace/studios/'),
+                Path('/content')
             ]
             for path in possible_paths:
-                if path.exists() and os.access(path, os.W_OK):
+                if path.exists():
                     reinitialize_paths(path)
                     break
             else:
-                print("Warning: Using default home path, Lightning.ai path detection failed")
+                print("Warning: Using default path for Lightning.ai")
+                reinitialize_paths(Path('/content'))
         elif env == 'Google Colab':
             reinitialize_paths(Path('/content'))
-        elif env == 'Kaggle':
-            reinitialize_paths(Path('/kaggle/working'))
 
         # download scripts files
         if not args.skip_download:
-            print(f"📥 Downloading from {user}/{repo} (branch: {args.branch})")
             await download_files_async(args.lang, user, repo, args.branch, args.log)
 
         setup_module_folder()
@@ -387,14 +357,12 @@ async def main_async(args=None):
                 fork=args.fork
             )
         except ImportError as e:
-            print(f"⚠️  Could not load seasonal display: {e}")
-            print(f"✅ Setup complete! Environment: {env}, Language: {args.lang}")
+            print(f"Warning: Could not load season display: {e}")
+            print("Setup completed successfully!")
 
     except Exception as e:
-        print(f"❌ Setup failed: {str(e)}")
-        if args.log:
-            import traceback
-            traceback.print_exc()
+        print(f"Setup failed: {str(e)}")
+        print("Please check your internet connection and try again.")
         raise
 
 if __name__ == "__main__":
