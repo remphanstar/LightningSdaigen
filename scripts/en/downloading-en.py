@@ -735,6 +735,7 @@ def handle_submodels(selection, num_selection, model_dict, dst_dir, base_url, in
     return base_url
 
 line = ""
+lora = ""
 line = handle_submodels(model, model_num, model_list, model_dir, line)
 line = handle_submodels(lora, None, lora_list, lora_dir, line)
 line = handle_submodels(vae, vae_num, vae_list, vae_dir, line)
