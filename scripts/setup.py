@@ -44,7 +44,7 @@ BASE_GITHUB_URL = "https://raw.githubusercontent.com"
 # Environment detection
 SUPPORTED_ENVS = {
     'COLAB_GPU': 'Google Colab',
-    'KAGGLE_URL_BASE': 'Kaggke',
+    'KAGGLE_URL_BASE': 'Kaggle',
     'LIGHTNING_AI': 'Lightning.ai'
 }
 
@@ -251,7 +251,7 @@ async def main_async(args=None):
 
     env = detect_environment()
     user, repo = parse_fork_arg(args.fork)   # GitHub: user/repo
-    
+
     # Dynamically set HOME path for Lightning.ai
     global HOME
     if env == 'Lightning.ai':
