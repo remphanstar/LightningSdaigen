@@ -374,11 +374,21 @@ class TunnelManager:
 
 if __name__ == '__main__':
     """Main execution flow"""
-    # FIXED: Downgrade numpy to a compatible version before anything else
+    # FIXED: Force install compatible versions of conflicting libraries
     print("Verifying and setting compatible library versions...")
-    subprocess.run([sys.executable, '-m', 'pip', 'install', 'numpy==1.26.4'], 
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    print("✅ Library versions checked.")
+    
+    # List of packages to force-install
+    packages_to_fix = [
+        "numpy==1.26.4",
+        "onnx==1.15.0",
+        "onnxruntime-gpu==1.17.1"
+    ]
+    
+    for package in packages_to_fix:
+        subprocess.run([sys.executable, '-m', 'pip', 'install', package], 
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+    print("✅ Library versions checked and fixed.")
 
     args = parse_arguments()
     print('Please Wait...\n')
