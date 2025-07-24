@@ -45,6 +45,7 @@ def read_model_data(file_path, data_type):
     type_map = {
         'model': ('model_list', ['none']),
         'vae': ('vae_list', ['none', 'ALL']),
+        'lora': ('lora_list', ['none']),
         'cnet': ('controlnet_list', ['none', 'ALL'])
     }
     key, prefixes = type_map[data_type]
@@ -75,12 +76,18 @@ HR = widgets.HTML('<hr>')
 """Create model selection widgets."""
 model_header = factory.create_header('Model Selection')
 model_options = read_model_data(f"{SCRIPTS}/_models-data.py", 'model')
-model_widget = factory.create_dropdown(model_options, 'Model:', 'D5K6.0')
+model_widget = factory.create_select_multiple(model_options, 'Model:', ('D5K6.0',))
 model_num_widget = factory.create_text('Model Number:', '', 'Enter model numbers for download.')
 inpainting_model_widget = factory.create_checkbox('Inpainting Models', False, class_names=['inpaint'], layout={'width': '250px'})
 XL_models_widget = factory.create_checkbox('SDXL', False, class_names=['sdxl'])
 
 switch_model_widget = factory.create_hbox([inpainting_model_widget, XL_models_widget])
+
+# --- LORA ---
+"""Create LoRA selection widgets."""
+lora_header = factory.create_header('LoRA Selection')
+lora_options = read_model_data(f"{SCRIPTS}/_models-data.py", 'lora')
+lora_widget = factory.create_select_multiple(lora_options, 'LoRA:', ('none',))
 
 # --- VAE ---
 """Create VAE selection widgets."""
@@ -334,6 +341,7 @@ factory.load_js(widgets_js)     # load JS (widgets)
 
 # Display sections
 model_widgets = [model_header, model_widget, model_num_widget, switch_model_widget]
+lora_widgets = [lora_header, lora_widget]
 vae_widgets = [vae_header, vae_widget, vae_num_widget]
 additional_widgets = additional_widget_list
 custom_download_widgets = [
@@ -351,6 +359,7 @@ custom_download_widgets = [
 
 # Create Boxes
 model_box = factory.create_vbox(model_widgets, class_names=['container'])
+lora_box = factory.create_vbox(lora_widgets, class_names=['container'])
 vae_box = factory.create_vbox(vae_widgets, class_names=['container'])
 additional_box = factory.create_vbox(additional_widgets, class_names=['container'])
 custom_download_box = factory.create_vbox(custom_download_widgets, class_names=['container', 'container_cdl'])
@@ -364,7 +373,7 @@ model_vae_box = factory.create_hbox(
 )
 
 widgetContainer = factory.create_vbox(
-    [model_vae_box, additional_box, custom_download_box, save_button],
+    [model_vae_box, lora_box, additional_box, custom_download_box, save_button],
     class_names=['widgetContainer'],
     layout={'min_width': CONTAINERS_WIDTH, 'max_width': CONTAINERS_WIDTH}
 )
@@ -392,17 +401,18 @@ empowerment_output_widget.add_class('hidden')
 def update_XL_options(change, widget):
     is_xl = change['new']
     defaults = {
-        True: ('uberRealisticPornMerge-xlV6Final-inpainting   BEST SO FAR!!! - PonyXL-Hybrid v1', 'Pony Standard VAE - V1.0', 'none'),    # XL models
-        False: ('D5K6.0', 'vae-ft-mse-840000-ema-pruned | 840000 | 840k SD1.5 VAE - vae-ft-mse-840k', 'none')    # SD 1.5 models
+        True: (('uberRealisticPornMerge-xlV6Final-inpainting   BEST SO FAR!!! - PonyXL-Hybrid v1',), ('BT Lowering Pants - Pony v1',), 'Pony Standard VAE - V1.0', 'none'),    # XL models
+        False: (('D5K6.0',), ('none',), 'vae-ft-mse-840000-ema-pruned | 840000 | 840k SD1.5 VAE - vae-ft-mse-840k', 'none')    # SD 1.5 models
     }
 
     data_file = '_xl-models-data.py' if is_xl else '_models-data.py'
     model_widget.options = read_model_data(f"{SCRIPTS}/{data_file}", 'model')
+    lora_widget.options = read_model_data(f"{SCRIPTS}/{data_file}", 'lora')
     vae_widget.options = read_model_data(f"{SCRIPTS}/{data_file}", 'vae')
     controlnet_widget.options = read_model_data(f"{SCRIPTS}/{data_file}", 'cnet')
 
     # Set default values from the dictionary
-    model_widget.value, vae_widget.value, controlnet_widget.value = defaults[is_xl]
+    model_widget.value, lora_widget.value, vae_widget.value, controlnet_widget.value = defaults[is_xl]
 
     # Disable/enable inpainting checkbox based on SDXL state
     if is_xl:
@@ -458,7 +468,7 @@ factory.connect_widgets([(empowerment_widget, 'value')], update_empowerment)
 # ================ Load / Save - Settings V4 ===============
 
 SETTINGS_KEYS = [
-      'XL_models', 'model', 'model_num', 'inpainting_model', 'vae', 'vae_num',
+      'XL_models', 'model', 'model_num', 'inpainting_model', 'lora', 'vae', 'vae_num',
       'latest_webui', 'latest_extensions', 'check_custom_nodes_deps', 'change_webui', 'detailed_download',
       'controlnet', 'controlnet_num', 'commit_hash',
       'civitai_token', 'huggingface_token', 'zrok_token', 'ngrok_token', 'commandline_arguments', 'theme_accent',
@@ -479,27 +489,4 @@ def save_settings():
 def load_settings():
     """Load widget values from settings."""
     if js.key_exists(SETTINGS_PATH, 'WIDGETS'):
-        widget_data = js.read(SETTINGS_PATH, 'WIDGETS')
-        for key in SETTINGS_KEYS:
-            if key in widget_data:
-                globals()[f"{key}_widget"].value = widget_data.get(key, '')
-
-    # Load Status GDrive-btn
-    GD_status = js.read(SETTINGS_PATH, 'mountGDrive', False)
-    GDrive_button.toggle = (GD_status == True)
-    if GDrive_button.toggle:
-        GDrive_button.add_class('active')
-    else:
-        GDrive_button.remove_class('active')
-
-def save_data(button):
-    """Handle save button click."""
-    save_settings()
-    all_widgets = [
-        model_box, vae_box, additional_box, custom_download_box, save_button,   # mainContainer
-        GDrive_button, export_button, import_button, notification_popup         # sideContainer
-    ]
-    factory.close(all_widgets, class_names=['hide'], delay=0.8)
-
-load_settings()
-save_button.on_click(save_data)
+        widget_data = js.read(SETTINGS_PATH, 'WIDGETS
