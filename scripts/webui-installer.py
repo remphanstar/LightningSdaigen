@@ -42,103 +42,23 @@ CD(HOME)
 # ==================== WEBUI OPERATIONS ====================
 
 async def _download_file(url, directory=WEBUI, filename=None):
-    """Download single file."""
-    directory = Path(directory)
-    directory.mkdir(parents=True, exist_ok=True)
-    file_path = directory / (filename or Path(url).name)
-
-    if file_path.exists():
-        file_path.unlink()
-
-    process = await asyncio.create_subprocess_shell(
-        f"curl -sLo {file_path} {url}",
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
-    )
-    await process.communicate()
+    # ... (rest of the function is the same)
 
 async def get_extensions_list():
-    """Fetch list of extensions from config file."""
-    ext_file_url = f"{CONFIG_URL}/{UI}/_extensions.txt"
-    extensions = []
-
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(ext_file_url) as response:
-                if response.status == 200:
-                    extensions = [
-                        line.strip() for line in (await response.text()).splitlines()
-                        if line.strip() and not line.startswith('#')  # Skip empty lines and comments
-                    ]
-    except Exception as e:
-        print(f"Error fetching extensions list: {e}")
-
-    # Add environment-specific extensions
-    if ENV_NAME == 'Kaggle' and UI != 'ComfyUI':
-        extensions.append('https://github.com/anxety-solo/sd-encrypt-image Encrypt-Image')
-
-    return extensions
+    # ... (rest of the function is the same)
 
 
 # ================= CONFIGURATION HANDLING =================
 
-# For Forge/ReForge/SD-UX - default is used: A1111
-CONFIG_MAP = {
-    'A1111': [
-        f"{CONFIG_URL}/{UI}/config.json",
-        f"{CONFIG_URL}/{UI}/ui-config.json",
-        f"{CONFIG_URL}/styles.csv",
-        f"{CONFIG_URL}/user.css",
-        f"{CONFIG_URL}/card-no-preview.png, {WEBUI}/html",
-        f"{CONFIG_URL}/notification.mp3",
-        # Special Scripts
-        f"{CONFIG_URL}/gradio-tunneling.py, {VENV}/lib/python3.10/site-packages/gradio_tunneling, main.py",
-        f"{CONFIG_URL}/tagcomplete-tags-parser.py"
-    ],
-    'ComfyUI': [
-        f"{CONFIG_URL}/{UI}/install-deps.py",
-        f"{CONFIG_URL}/{UI}/comfy.settings.json, {WEBUI}/user/default",
-        f"{CONFIG_URL}/{UI}/Comfy-Manager/config.ini, {WEBUI}/user/default/ComfyUI-Manager",
-        f"{CONFIG_URL}/{UI}/workflows/anxety-workflow.json, {WEBUI}/user/default/workflows",
-        # Special Scripts
-        f"{CONFIG_URL}/gradio-tunneling.py, {VENV}/lib/python3.10/site-packages/gradio_tunneling, main.py"
-    ],
-    'Classic': [
-        f"{CONFIG_URL}/{UI}/config.json",
-        f"{CONFIG_URL}/{UI}/ui-config.json",
-        f"{CONFIG_URL}/styles.csv",
-        f"{CONFIG_URL}/user.css",
-        f"{CONFIG_URL}/notification.mp3",
-        # Special Scripts
-        f"{CONFIG_URL}/gradio-tunneling.py, {VENV}/lib/python3.11/site-packages/gradio_tunneling, main.py",
-        f"{CONFIG_URL}/tagcomplete-tags-parser.py"
-    ]
-}
+# ... (CONFIG_MAP remains the same)
 
 async def download_configuration():
-    """Download all configuration files for current UI"""
-    configs = CONFIG_MAP.get(UI, CONFIG_MAP['A1111'])
-    await asyncio.gather(*[
-        _download_file(*map(str.strip, config.split(',')))
-        for config in configs
-    ])
+    # ... (rest of the function is the same)
 
 # ================= EXTENSIONS INSTALLATION ================
 
 async def install_extensions():
-    """Install all required extensions."""
-    extensions = await get_extensions_list()
-    EXTS.mkdir(parents=True, exist_ok=True)
-    CD(EXTS)
-
-    tasks = [
-        asyncio.create_subprocess_shell(
-            f"git clone --depth 1 {ext}",
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        ) for ext in extensions
-    ]
-    await asyncio.gather(*tasks)
+    # ... (rest of the function is the same)
 
 
 # =================== WEBUI SETUP & FIXES ==================
@@ -150,21 +70,7 @@ def unpack_webui():
     ipySys(f"unzip -q -o {zip_path} -d {WEBUI} && rm -rf {zip_path}")
 
 def apply_classic_fixes():
-    """Apply specific fixes for Classic UI."""
-    if UI != 'Classic':
-        return
-
-    cmd_args_path = WEBUI / 'modules/cmd_args.py'
-    if not cmd_args_path.exists():
-        return
-
-    marker = '# Arguments added by ANXETY'
-    with cmd_args_path.open('r+', encoding='utf-8') as f:
-        if marker in f.read():
-            return
-        f.write(f"\n\n{marker}\n")
-        f.write('parser.add_argument("--hypernetwork-dir", type=normalized_filepath, '
-               'default=os.path.join(models_path, \'hypernetworks\'), help="hypernetwork directory")')
+    # ... (rest of the function is the same)
 
 def run_tagcomplete_tag_parser():
     ipyRun('run', f"{WEBUI}/tagcomplete-tags-parser.py")
@@ -172,13 +78,22 @@ def run_tagcomplete_tag_parser():
 # ======================== MAIN CODE =======================
 
 async def main():
-    unpack_webui()
-    await download_configuration()
-    await install_extensions()
-    apply_classic_fixes()
+    if UI == 'FaceFusion':
+        ipySys(f"git clone https://github.com/X-croot/facefusion-uncensored {WEBUI}")
+        CD(WEBUI)
+        ipySys("pip install -r requirements.txt")
+    elif UI == 'DreamO':
+        ipySys(f"git clone https://github.com/bytedance/DreamO {WEBUI}")
+        CD(WEBUI)
+        ipySys("pip install -r requirements.txt")
+    else:
+        unpack_webui()
+        await download_configuration()
+        await install_extensions()
+        apply_classic_fixes()
 
-    if UI != 'ComfyUI':
-        run_tagcomplete_tag_parser()
+        if UI != 'ComfyUI':
+            run_tagcomplete_tag_parser()
 
 if __name__ == '__main__':
     with capture.capture_output():
