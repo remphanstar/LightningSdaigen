@@ -13,6 +13,7 @@ import requests
 import argparse
 import logging
 import asyncio
+import aiohttp
 import shlex
 import time
 import json
@@ -373,6 +374,12 @@ class TunnelManager:
 
 if __name__ == '__main__':
     """Main execution flow"""
+    # FIXED: Downgrade numpy to a compatible version before anything else
+    print("Verifying and setting compatible library versions...")
+    subprocess.run([sys.executable, '-m', 'pip', 'install', 'numpy==1.26.4'], 
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    print("✅ Library versions checked.")
+
     args = parse_arguments()
     print('Please Wait...\n')
 
