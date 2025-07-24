@@ -627,3 +627,58 @@ def update_empowerment(change, widget):
             empowerment_output_widget.remove_class('hidden')
         else:
             for wg in customDL_widgets:
+                wg.remove_class('hidden')
+            empowerment_output_widget.add_class('hidden')
+
+    except Exception as e:
+        print(f"Error in update_empowerment: {e}")
+
+
+# Connecting widgets
+factory.connect_widgets([(change_webui_widget, 'value')], update_change_webui)
+factory.connect_widgets([(XL_models_widget, 'value')], update_XL_options)
+factory.connect_widgets([(empowerment_widget, 'value')], update_empowerment)
+
+
+# ================ Load / Save - Settings V4 ===============
+
+def save_settings():
+    """Save widget values to settings."""
+    widgets_values = {key: wm.widgets[key].value for key in wm.settings_keys if key in wm.widgets}
+    js.save(SETTINGS_PATH, 'WIDGETS', widgets_values)
+    if IN_COLAB:
+        js.save(SETTINGS_PATH, 'mountGDrive', True if GDrive_button.toggle else False)  # Save Status GDrive-btn
+
+    update_current_webui(change_webui_widget.value)  # Update Selected WebUI in settings.json
+
+def load_settings():
+    """Load widget values from settings."""
+    if js.key_exists(SETTINGS_PATH, 'WIDGETS'):
+        widget_data = js.read(SETTINGS_PATH, 'WIDGETS')
+        for key in wm.settings_keys:
+            if key in widget_data and key in wm.widgets:
+                try:
+                    wm.widgets[key].value = widget_data.get(key, '')
+                except Exception as e:
+                    print(f"Warning: could not load setting for {key}: {e}")
+
+    # Load Status GDrive-btn
+    if IN_COLAB:
+        GD_status = js.read(SETTINGS_PATH, 'mountGDrive', False)
+        GDrive_button.toggle = (GD_status == True)
+        if GDrive_button.toggle:
+            GDrive_button.add_class('active')
+        else:
+            GDrive_button.remove_class('active')
+
+def save_data(button):
+    """Handle save button click."""
+    save_settings()
+    all_widgets = [
+        model_box, vae_box, additional_box, custom_download_box, save_button,   # mainContainer
+        GDrive_button, export_button, import_button, notification_popup         # sideContainer
+    ]
+    factory.close(all_widgets, class_names=['hide'], delay=0.8)
+
+load_settings()
+save_button.on_click(save_data)
