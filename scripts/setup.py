@@ -35,8 +35,8 @@ os.environ.update({
 })
 
 # GitHub configuration
-DEFAULT_USER = 'anxety-solo'
-DEFAULT_REPO = 'sdAIgen'
+DEFAULT_USER = 'remphanstar'
+DEFAULT_REPO = 'LightningSdaigen'
 DEFAULT_BRANCH = 'main'
 DEFAULT_LANG = 'en'
 BASE_GITHUB_URL = "https://raw.githubusercontent.com"
