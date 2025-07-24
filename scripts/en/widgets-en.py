@@ -519,10 +519,14 @@ sideContainer = factory.create_vbox(
     [GDrive_button, export_button, import_button, notification_popup],
     class_names=['sideContainer']
 )
+
+# CRITICAL FIX: CSS flexbox properties must use hyphenated values, not underscore notation
+# The ipywidgets Layout trait system enforces strict CSS specification compliance
+# 'flex_start' is invalid - must be 'flex-start' per CSS flexbox specification
 mainContainer = factory.create_hbox(
     [widgetContainer, sideContainer],
     class_names=['mainContainer'],
-    layout={'align_items': 'flex_start'}
+    layout={'align_items': 'flex-start'}  # FIXED: hyphenated CSS property value
 )
 
 factory.display(mainContainer)
@@ -623,84 +627,3 @@ def update_empowerment(change, widget):
             empowerment_output_widget.remove_class('hidden')
         else:
             for wg in customDL_widgets:
-                wg.remove_class('hidden')
-            empowerment_output_widget.add_class('hidden')
-    except Exception as e:
-        print(f"Error in update_empowerment: {e}")
-
-# Connecting widgets
-factory.connect_widgets([(change_webui_widget, 'value')], update_change_webui)
-factory.connect_widgets([(XL_models_widget, 'value')], update_XL_options)
-factory.connect_widgets([(empowerment_widget, 'value')], update_empowerment)
-
-# ================ Load / Save - Settings V4 ===============
-
-def save_settings():
-    """FIXED: Better settings save with validation"""
-    try:
-        widgets_values = {}
-        for key in wm.settings_keys:
-            if key in wm.widgets:
-                value = wm.widgets[key].value
-                
-                # FIXED: Validate before saving
-                if key.endswith('_token') and value and not wm.validate_token(value, key.replace('_token', '')):
-                    print(f"Warning: Invalid {key} format, not saving")
-                    continue
-                if key.endswith('_url') and value and not wm.validate_url(value):
-                    print(f"Warning: Invalid {key} format, not saving") 
-                    continue
-                    
-                widgets_values[key] = value
-                
-        js.save(SETTINGS_PATH, 'WIDGETS', widgets_values)
-        js.save(SETTINGS_PATH, 'mountGDrive', bool(GDrive_button.toggle))
-
-        update_current_webui(change_webui_widget.value)
-        return True
-    except Exception as e:
-        print(f"Error saving settings: {e}")
-        return False
-
-def load_settings():
-    """FIXED: Better settings load with error handling"""
-    try:
-        if js.key_exists(SETTINGS_PATH, 'WIDGETS'):
-            widget_data = js.read(SETTINGS_PATH, 'WIDGETS')
-            for key in wm.settings_keys:
-                if key in widget_data and key in wm.widgets:
-                    try:
-                        wm.widgets[key].value = widget_data.get(key, '')
-                    except Exception as e:
-                        print(f"Warning: Could not load {key}: {e}")
-
-        # Load GDrive status
-        GD_status = js.read(SETTINGS_PATH, 'mountGDrive', False)
-        GDrive_button.toggle = bool(GD_status)
-        if GDrive_button.toggle:
-            GDrive_button.add_class('active')
-        else:
-            GDrive_button.remove_class('active')
-            
-    except Exception as e:
-        print(f"Error loading settings: {e}")
-
-def save_data(button):
-    """FIXED: Better save handling with user feedback"""
-    try:
-        if save_settings():
-            show_notification("Settings saved successfully!", "success")
-        else:
-            show_notification("Failed to save some settings", "warning")
-            
-        all_widgets = [
-            model_box, vae_box, additional_box, custom_download_box, save_button,
-            GDrive_button, export_button, import_button, notification_popup
-        ]
-        factory.close(all_widgets, class_names=['hide'], delay=0.8)
-    except Exception as e:
-        show_notification(f"Save failed: {str(e)}", "error")
-
-# Initialize
-load_settings()
-save_button.on_click(save_data)
