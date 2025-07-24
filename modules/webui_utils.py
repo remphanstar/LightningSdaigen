@@ -26,8 +26,9 @@ WEBUI_PATHS = {
     'A1111': ('Stable-diffusion', 'VAE', 'Lora', 'embeddings', 'extensions', 'ESRGAN', 'outputs'),
     'ComfyUI': ('checkpoints', 'vae', 'loras', 'embeddings', 'custom_nodes', 'upscale_models', 'output'),
     'Classic': ('Stable-diffusion', 'VAE', 'Lora', 'embeddings', 'extensions', 'ESRGAN', 'output'),
-    'FaceFusion': ('', '', '', '', '', '', 'output'), # Paths can be adjusted as needed
-    'DreamO': ('', '', '', '', '', '', 'output') # Paths can be adjusted as needed
+    'Lightning.ai': ('Stable-diffusion', 'VAE', 'Lora', 'embeddings', 'extensions', 'ESRGAN', 'outputs'),
+    'FaceFusion': ('', '', '', '', '', '', 'output'),
+    'DreamO': ('', '', '', '', '', '', 'output')
 }
 
 
