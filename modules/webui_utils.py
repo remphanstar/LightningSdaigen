@@ -23,22 +23,11 @@ SETTINGS_PATH = PATHS['settings_path']
 DEFAULT_UI = 'A1111'
 
 WEBUI_PATHS = {
-    'A1111': (
-        'Stable-diffusion', 'VAE', 'Lora',
-        'embeddings', 'extensions', 'ESRGAN', 'outputs'
-    ),
-    'ComfyUI': (
-        'checkpoints', 'vae', 'loras',
-        'embeddings', 'custom_nodes', 'upscale_models', 'output'
-    ),
-    'Classic': (
-        'Stable-diffusion', 'VAE', 'Lora',
-        'embeddings', 'extensions', 'ESRGAN', 'output'
-    ),
-    'Lightning.ai': (
-        'Stable-diffusion', 'VAE', 'Lora',
-        'embeddings', 'extensions', 'ESRGAN', 'outputs'
-    )
+    'A1111': ('Stable-diffusion', 'VAE', 'Lora', 'embeddings', 'extensions', 'ESRGAN', 'outputs'),
+    'ComfyUI': ('checkpoints', 'vae', 'loras', 'embeddings', 'custom_nodes', 'upscale_models', 'output'),
+    'Classic': ('Stable-diffusion', 'VAE', 'Lora', 'embeddings', 'extensions', 'ESRGAN', 'output'),
+    'FaceFusion': ('', '', '', '', '', '', 'output'), # Paths can be adjusted as needed
+    'DreamO': ('', '', '', '', '', '', 'output') # Paths can be adjusted as needed
 }
 
 
@@ -75,14 +64,14 @@ def _set_webui_paths(ui: str) -> None:
     config_root = webui_root / 'user/default' if is_comfy else webui_root
 
     path_config = {
-        'model_dir': str(models_root / checkpoint),
-        'vae_dir': str(models_root / vae),
-        'lora_dir': str(models_root / lora),
-        'embed_dir': str(embed_root / embed),
-        'extension_dir': str(webui_root / extension),
+        'model_dir': str(models_root / checkpoint) if checkpoint else str(webui_root),
+        'vae_dir': str(models_root / vae) if vae else str(webui_root),
+        'lora_dir': str(models_root / lora) if lora else str(webui_root),
+        'embed_dir': str(embed_root / embed) if embed else str(webui_root),
+        'extension_dir': str(webui_root / extension) if extension else str(webui_root),
         'control_dir': str(models_root / control_dir),
-        'upscale_dir': str(models_root / upscale),
-        'output_dir': str(webui_root / output),
+        'upscale_dir': str(models_root / upscale) if upscale else str(webui_root),
+        'output_dir': str(webui_root / output) if output else str(webui_root),
         'config_dir': str(config_root),
         # Additional directories
         'adetailer_dir': str(models_root / ('ultralytics' if is_comfy else 'adetailer')),
