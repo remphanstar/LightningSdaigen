@@ -87,6 +87,14 @@ class WidgetManager:
             print(f"Warning: Could not load {data_type} data: {e}")
             return prefixes  # Return at least the prefixes
 
+    def get_safe_default(self, options, preferred_defaults):
+        """Get the first available option from preferred defaults, or first option if none match"""
+        for default in preferred_defaults:
+            if default in options:
+                return default
+        # If no preferred defaults exist, return the first non-'none' option, or 'none' if that's all we have
+        return next((opt for opt in options if opt != 'none'), options[0] if options else 'none')
+
     # FIXED: Input validation functions
     def validate_token(self, token, token_type=""):
         """Validate API token format"""
@@ -134,7 +142,15 @@ WEBUI_SELECTION = {
 """Create model selection widgets."""
 model_header = factory.create_header('Model Selection')
 model_options = wm.read_model_data(f"{SCRIPTS}/_models-data.py", 'model')
-model_widget = factory.create_dropdown(model_options, 'Model:', '4. Counterfeit [Anime] [V3] + INP')
+
+# FIXED: Use safe default selection for models
+model_preferred_defaults = [
+    'D5K6.0',  # First model in your custom list
+    'Merged amateurs - Mixed Amateurs',  # Second option
+]
+model_default = wm.get_safe_default(model_options, model_preferred_defaults)
+model_widget = factory.create_dropdown(model_options, 'Model:', model_default)
+
 model_num_widget = factory.create_text('Model Number:', '', 'Enter model numbers for download.')
 inpainting_model_widget = factory.create_checkbox('Inpainting Models', False, class_names=['inpaint'], layout={'width': '250px'})
 XL_models_widget = factory.create_checkbox('SDXL', False, class_names=['sdxl'])
@@ -153,7 +169,16 @@ wm.widgets.update({
 """Create VAE selection widgets."""
 vae_header = factory.create_header('VAE Selection')
 vae_options = wm.read_model_data(f"{SCRIPTS}/_models-data.py", 'vae')
-vae_widget = factory.create_dropdown(vae_options, 'Vae:', '3. Blessed2.vae')
+
+# FIXED: Use safe default selection for VAE
+vae_preferred_defaults = [
+    'vae-ft-mse-840000-ema-pruned | 840000 | 840k SD1.5 VAE - vae-ft-mse-840k',  # First VAE in your list
+    'ClearVAE(SD1.5) - v2.3',  # Second option
+    'none'
+]
+vae_default = wm.get_safe_default(vae_options, vae_preferred_defaults)
+vae_widget = factory.create_dropdown(vae_options, 'Vae:', vae_default)
+
 vae_num_widget = factory.create_text('Vae Number:', '', 'Enter vae numbers for download.')
 
 wm.widgets.update({
@@ -514,11 +539,7 @@ def update_XL_options(change, widget):
     """FIXED: Better error handling and state management"""
     try:
         is_xl = change['new']
-        defaults = {
-            True: ('4. WAI-illustrious [Anime] [V14] [XL]', '1. sdxl.vae', 'none'),
-            False: ('4. Counterfeit [Anime] [V3] + INP', '3. Blessed2.vae', 'none')
-        }
-
+        
         data_file = '_xl-models-data.py' if is_xl else '_models-data.py'
         
         # Update options with error handling
@@ -530,21 +551,38 @@ def update_XL_options(change, widget):
             print(f"Warning: Could not update model options: {e}")
             return
 
-        # Set default values
-        model_default, vae_default, controlnet_default = defaults[is_xl]
-        
-        if model_default in model_widget.options:
-            model_widget.value = model_default
-        if vae_default in vae_widget.options:
-            vae_widget.value = vae_default
-        if controlnet_default in controlnet_widget.options:
-            controlnet_widget.value = controlnet_default
-
-        # Handle inpainting checkbox
+        # FIXED: Use safe defaults for XL vs regular models
         if is_xl:
+            # XL model defaults - use first available XL model
+            xl_model_defaults = list(model_widget.options)[1:4]  # Skip 'none', get first few
+            xl_vae_defaults = ['none', 'ALL']
+            xl_controlnet_defaults = ['none']
+            
+            model_widget.value = wm.get_safe_default(model_widget.options, xl_model_defaults)
+            vae_widget.value = wm.get_safe_default(vae_widget.options, xl_vae_defaults)
+            controlnet_widget.value = wm.get_safe_default(controlnet_widget.options, xl_controlnet_defaults)
+            
+            # Handle inpainting checkbox for XL
             inpainting_model_widget.add_class('_disable')
             inpainting_model_widget.value = False
         else:
+            # Regular model defaults - use your custom models
+            regular_model_defaults = [
+                'D5K6.0',
+                'Merged amateurs - Mixed Amateurs'
+            ]
+            regular_vae_defaults = [
+                'vae-ft-mse-840000-ema-pruned | 840000 | 840k SD1.5 VAE - vae-ft-mse-840k',
+                'ClearVAE(SD1.5) - v2.3',
+                'none'
+            ]
+            regular_controlnet_defaults = ['none']
+            
+            model_widget.value = wm.get_safe_default(model_widget.options, regular_model_defaults)
+            vae_widget.value = wm.get_safe_default(vae_widget.options, regular_vae_defaults)
+            controlnet_widget.value = wm.get_safe_default(controlnet_widget.options, regular_controlnet_defaults)
+            
+            # Enable inpainting checkbox for regular models
             inpainting_model_widget.remove_class('_disable')
             
     except Exception as e:
