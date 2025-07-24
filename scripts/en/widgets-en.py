@@ -19,7 +19,7 @@ PATHS = {k: Path(v) for k, v in osENV.items() if k.endswith('_path')}   # k -> k
 
 HOME = PATHS['home_path']
 SCR_PATH = PATHS['scr_path']
-SETTINGS_PATH = PATHS['settings_path']
+SETTINGS_PATH = SCR_PATH / 'settings.json'
 ENV_NAME = js.read(SETTINGS_PATH, 'ENVIRONMENT.env_name')
 
 SCRIPTS = SCR_PATH / 'scripts'
@@ -75,7 +75,7 @@ HR = widgets.HTML('<hr>')
 """Create model selection widgets."""
 model_header = factory.create_header('Model Selection')
 model_options = read_model_data(f"{SCRIPTS}/_models-data.py", 'model')
-model_widget = factory.create_dropdown(model_options, 'Model:', '4. Counterfeit [Anime] [V3] + INP')
+model_widget = factory.create_dropdown(model_options, 'Model:', 'D5K6.0')
 model_num_widget = factory.create_text('Model Number:', '', 'Enter model numbers for download.')
 inpainting_model_widget = factory.create_checkbox('Inpainting Models', False, class_names=['inpaint'], layout={'width': '250px'})
 XL_models_widget = factory.create_checkbox('SDXL', False, class_names=['sdxl'])
@@ -86,7 +86,7 @@ switch_model_widget = factory.create_hbox([inpainting_model_widget, XL_models_wi
 """Create VAE selection widgets."""
 vae_header = factory.create_header('VAE Selection')
 vae_options = read_model_data(f"{SCRIPTS}/_models-data.py", 'vae')
-vae_widget = factory.create_dropdown(vae_options, 'Vae:', '3. Blessed2.vae')
+vae_widget = factory.create_dropdown(vae_options, 'Vae:', 'vae-ft-mse-840000-ema-pruned | 840000 | 840k SD1.5 VAE - vae-ft-mse-840k')
 vae_num_widget = factory.create_text('Vae Number:', '', 'Enter vae numbers for download.')
 
 # --- ADDITIONAL ---
@@ -392,8 +392,8 @@ empowerment_output_widget.add_class('hidden')
 def update_XL_options(change, widget):
     is_xl = change['new']
     defaults = {
-        True: ('4. WAI-illustrious [Anime] [V14] [XL]', '1. sdxl.vae', 'none'),    # XL models
-        False: ('4. Counterfeit [Anime] [V3] + INP', '3. Blessed2.vae', 'none')    # SD 1.5 models
+        True: ('uberRealisticPornMerge-xlV6Final-inpainting   BEST SO FAR!!! - PonyXL-Hybrid v1', 'Pony Standard VAE - V1.0', 'none'),    # XL models
+        False: ('D5K6.0', 'vae-ft-mse-840000-ema-pruned | 840000 | 840k SD1.5 VAE - vae-ft-mse-840k', 'none')    # SD 1.5 models
     }
 
     data_file = '_xl-models-data.py' if is_xl else '_models-data.py'
