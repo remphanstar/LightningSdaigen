@@ -290,4 +290,185 @@ class TunnelManager:
                 'pattern': re.compile(r'[\w-]+\.a\.free\.pinggy\.link')
             }),
             ('Cloudflared', {
-                'command': f"cl tunnel --url localhost
+                'command': f"cl tunnel --url localhost:{self.tunnel_port}",
+                'pattern': re.compile(r'[\w-]+\.trycloudflare\.com')
+            }),
+            ('Localtunnel', {
+                'command': f"lt --port {self.tunnel_port}",
+                'pattern': re.compile(r'[\w-]+\.loca\.lt'),
+                'note': f"| Password: {COL.G}{self.public_ip}{COL.X}"
+            })
+        ]
+
+        if zrok_token:
+            env_path = HOME / '.zrok/environment.json'
+            current_token = None
+
+            if env_path.exists():
+                with open(env_path, 'r') as f:
+                    current_token = json.load(f).get('zrok_token')
+
+            if current_token != zrok_token:
+                ipySys('zrok disable &> /dev/null')
+                ipySys(f"zrok enable {zrok_token} &> /dev/null")
+
+            services.append(('Zrok', {
+                'command': f"zrok share public http://localhost:{self.tunnel_port}/ --headless",
+                'pattern': re.compile(r'[\w-]+\.share\.zrok\.io')
+            }))
+
+        if ngrok_token:
+            config_path = HOME / '.config/ngrok/ngrok.yml'
+            current_token = None
+
+            if config_path.exists():
+                with open(config_path, 'r') as f:
+                    current_token = yaml.safe_load(f).get('agent', {}).get('authtoken')
+
+            if current_token != ngrok_token:
+                ipySys(f"ngrok config add-authtoken {ngrok_token}")
+
+            services.append(('Ngrok', {
+                'command': f"ngrok http http://localhost:{self.tunnel_port} --log stdout",
+                'pattern': re.compile(r'https://[\w-]+\.ngrok-free\.app')
+            }))
+
+        # Create status printer task
+        printer_task = asyncio.create_task(self._print_status())
+
+        # Run all tests concurrently
+        tasks = []
+        for name, config in services:
+            tasks.append(self._test_tunnel(name, config))
+
+        results = await asyncio.gather(*tasks)
+
+        # Cancel status printer
+        printer_task.cancel()
+        try:
+            await printer_task
+        except asyncio.CancelledError:
+            pass
+
+        # Process results
+        for (name, config), (success, error) in zip(services, results):
+            if success:
+                self.tunnels.append({**config, 'name': name})
+            else:
+                self.error_reasons.append({'name': name, 'reason': error})
+
+        return (
+            self.tunnels,
+            len(services),
+            len(self.tunnels),
+            len(self.error_reasons)
+        )
+
+
+# ========================== Main ==========================
+
+if __name__ == '__main__':
+    """Main execution flow"""
+    # Force install compatible versions of conflicting libraries into the correct venv
+    print("Verifying and setting compatible library versions...")
+    python_executable = VENV / 'bin' / 'python'
+    
+    packages_to_fix = [
+        "accelerate==0.21.0",
+        "rembg",
+        "onnx==1.14.0",
+        "onnxruntime==1.15.0",
+        "insightface==0.7.3",
+        "opencv-python==4.7.0.72",
+        "ifnude",
+        "supervision",
+        "packaging"
+    ]
+    
+    for package in packages_to_fix:
+        subprocess.run([str(python_executable), '-m', 'pip', 'install', '--force-reinstall', package], 
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+    # Clone the missing extension
+    extensions_path = Path(WEBUI) / 'extensions'
+    sam_path = extensions_path / 'sd-webui-segment-anything'
+    if not sam_path.exists():
+        subprocess.run(['git', 'clone', 'https://github.com/continue-revolution/sd-webui-segment-anything.git', str(sam_path)])
+
+    print("✅ Library versions checked and fixed.")
+
+    args = parse_arguments()
+    print('Please Wait...\n')
+
+    osENV['PYTHONWARNINGS'] = 'ignore'
+
+    # Initialize tunnel manager and services
+    tunnel_port = 8188 if UI == 'ComfyUI' else 7860
+    tunnel_mgr = TunnelManager(tunnel_port)
+
+    # Run async setup
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    tunnels, total, success, errors = loop.run_until_complete(tunnel_mgr.setup_tunnels())
+
+    # Set up tunneling service
+    tunnelingService = Tunnel(tunnel_port)
+    tunnelingService.logger.setLevel(logging.DEBUG)
+
+    for tunnel in tunnels:
+        tunnelingService.add_tunnel(**tunnel)
+
+    clear_output(wait=True)
+
+    # Launch sequence
+    _trashing()
+    _update_config_paths()
+    LAUNCHER = get_launch_command()
+
+    # Setup pinggy timer
+    ipySys(f"echo -n {int(time.time())+(3600+20)} > {WEBUI}/static/timer-pinggy.txt")
+
+    with tunnelingService:
+        CD(WEBUI)
+
+        if UI == 'ComfyUI':
+            COMFYUI_SETTINGS_PATH = SCR_PATH / 'ComfyUI.json'
+            if check_custom_nodes_deps:
+                ipySys('python3 install-deps.py')
+                clear_output(wait=True)
+
+            if not js.key_exists(COMFYUI_SETTINGS_PATH, 'install_req', True):
+                print('Installing ComfyUI dependencies...')
+                subprocess.run(['pip', 'install', '-r', 'requirements.txt'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                js.save(COMFYUI_SETTINGS_PATH, 'install_req', True)
+                clear_output(wait=True)
+
+        print(f"{COL.B}>> Total Tunnels:{COL.X} {total} | {COL.G}Success:{COL.X} {success} | {COL.R}Errors:{COL.X} {errors}\n")
+
+        # Display error details if any
+        if args.log and errors > 0:
+            print(f"{COL.R}>> Failed Tunnels:{COL.X}")
+            for error in tunnel_mgr.error_reasons:
+                print(f"  - {error['name']}: {error['reason']}")
+            print()
+
+        print(f"🔧 WebUI: {COL.B}{UI}{COL.X}")
+
+        try:
+            ipySys(LAUNCHER)
+        except KeyboardInterrupt:
+            pass
+
+    # Post-execution cleanup
+    if zrok_token:
+        ipySys('zrok disable &> /dev/null')
+        print('\n🔐 Zrok tunnel disabled :3')
+
+    # Display session duration
+    try:
+        with open(f"{WEBUI}/static/timer.txt") as f:
+            timer = float(f.read())
+            duration = timedelta(seconds=time.time() - timer)
+            print(f"\n⌚️ Session duration: {COL.Y}{str(duration).split('.')[0]}{COL.X}")
+    except FileNotFoundError:
+        pass
