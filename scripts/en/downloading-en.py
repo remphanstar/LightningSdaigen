@@ -60,7 +60,7 @@ if not js.key_exists(SETTINGS_PATH, 'ENVIRONMENT.install_deps', True):
 def setup_venv(url):
     """Downloads and correctly extracts the provided venv archive."""
     CD(HOME)
-    archive_name = "fixed_venv.tar.lz4"
+    archive_name = "final_fixed_venv.tar.lz4"
     destination = HOME / archive_name
     
     if VENV.exists():
@@ -77,7 +77,7 @@ def setup_venv(url):
         raise RuntimeError(f"Failed to download the venv archive: {e}")
 
     print("Extracting venv archive...")
-    extract_target = HOME / "corrected_venv"
+    extract_target = HOME / "final_corrected_venv"
     if extract_target.exists():
          shutil.rmtree(extract_target)
 
@@ -88,7 +88,7 @@ def setup_venv(url):
     print("✅ Virtual environment setup complete.")
     
 # Execute Venv Setup
-my_custom_venv_url = "https://github.com/remphanstar/LightningSdaigen/releases/download/fixed_venv.tar.lz4/fixed_venv.tar.1.lz4"
+my_custom_venv_url = "https://github.com/remphanstar/LightningSdaigen/releases/download/tag2fixed_venv.tar.lz4/final_fixed_venv.tar.lz4"
 setup_venv(my_custom_venv_url)
 
 
