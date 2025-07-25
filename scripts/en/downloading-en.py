@@ -51,16 +51,14 @@ def install_packages(install_lib):
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, Exception) as e:
             print(f"\n{COL.R}Warning: Failed to install {package}: {e}{COL.X}")
 
-# --- DEPENDENCY INSTALLATION ---
+# --- DEPENDENCY INSTALLATION (RUNS FIRST) ---
 if not js.key_exists(SETTINGS_PATH, 'ENVIRONMENT.install_deps', True):
     print('💿 Installing required libraries...')
     install_lib = {
-        'aria2': "pip install aria2",
+        'system_packages': "apt-get -y install aria2 lz4 pv",
         'gdown': "pip install gdown",
         'localtunnel': "npm install -g localtunnel",
         'cloudflared': "wget -qO /usr/bin/cl https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64; chmod +x /usr/bin/cl",
-        'zrok': "wget -qO zrok.tar.gz https://github.com/openziti/zrok/releases/download/v0.4.23/zrok_0.4.23_linux_amd64.tar.gz; tar -xzf zrok.tar.gz -C /usr/bin; rm -f zrok.tar.gz",
-        'ngrok': "wget -qO ngrok.tgz https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz; tar -xzf ngrok.tgz -C /usr/bin; rm -f ngrok.tgz"
     }
     install_packages(install_lib)
     clear_output()
@@ -88,7 +86,6 @@ def setup_venv(url):
         raise RuntimeError(f"Failed to download the venv archive: {e}")
 
     print("Extracting venv archive...")
-    ipySys("apt-get -y install lz4 pv > /dev/null 2>&1")
     extract_target = HOME / "corrected_venv"
     if extract_target.exists():
          shutil.rmtree(extract_target)
@@ -113,9 +110,5 @@ else:
 
 # (The rest of the script for downloading models, LoRAs, etc.)
 print('📦 Downloading models and other assets...')
-# ...
+# ... (rest of the original script logic) ...
 print('\r🏁 Asset downloads complete!')
-try:
-    ipyRun('run', f"{SCRIPTS}/download-result.py")
-except Exception as e:
-    print(f"Warning: Could not display download results: {e}")
