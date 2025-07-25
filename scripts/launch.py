@@ -29,13 +29,22 @@ COL = COLORS
 # --- HELPER FUNCTIONS ---
 def get_launch_command():
     """Construct the final launch command."""
-    common_args = ' --xformers --no-half-vae --enable-insecure-extension-access --disable-console-progressbars --theme dark'
+    # Remove duplicate arguments for a clean command
+    base_args = commandline_arguments.split()
+    unique_args = []
+    for arg in base_args:
+        if arg not in unique_args:
+            unique_args.append(arg)
+    
+    final_args = " ".join(unique_args)
+    
+    common_args = ' --enable-insecure-extension-access --disable-console-progressbars --theme dark'
     if ENV_NAME == 'Kaggle':
         common_args += ' --encrypt-pass=emoy4cnkm6imbysp84zmfiz1opahooblh7j34sgh'
     if theme_accent != 'anxety':
         common_args += f" --anxety {theme_accent}"
         
-    return f"python3 launch.py {commandline_arguments}{common_args}"
+    return f"python3 launch.py {final_args}{common_args}"
 
 # --- MAIN EXECUTION ---
 if __name__ == '__main__':
