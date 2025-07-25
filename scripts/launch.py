@@ -4,6 +4,7 @@ import json_utils as js
 from IPython import get_ipython
 from pathlib import Path
 import os
+import sys
 
 # --- ENVIRONMENT SETUP ---
 osENV = os.environ
@@ -21,6 +22,10 @@ commandline_arguments = settings.get('WIDGETS', {}).get('commandline_arguments',
 theme_accent = settings.get('WIDGETS', {}).get('theme_accent', 'anxety')
 ENV_NAME = settings.get('ENVIRONMENT', {}).get('env_name')
 
+class COLORS:
+    B, X = "\033[34m", "\033[0m"
+COL = COLORS
+
 # --- HELPER FUNCTIONS ---
 def get_launch_command():
     """Construct the final launch command."""
@@ -34,11 +39,11 @@ def get_launch_command():
 
 # --- MAIN EXECUTION ---
 if __name__ == '__main__':
-    print("✅ Correct environment is active. Preparing to launch...")
+    print("✅ Environment is ready. Preparing to launch...")
     
     LAUNCHER = get_launch_command()
     
-    print(f"🔧 WebUI: {UI}")
+    print(f"🔧 WebUI: {COL.B}{UI}{COL.X}")
     print(f"🚀 Launching with command: {LAUNCHER}")
 
     try:
