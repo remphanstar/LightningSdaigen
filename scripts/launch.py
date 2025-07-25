@@ -381,7 +381,8 @@ if __name__ == '__main__':
     packages_to_fix = [
         "numpy==1.26.4",
         "onnx==1.15.0",
-        "onnxruntime==1.15.0"
+        "onnxruntime==1.15.0",
+        "packaging"
     ]
     
     for package in packages_to_fix:
