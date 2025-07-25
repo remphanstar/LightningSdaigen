@@ -72,25 +72,25 @@ def download_with_retry(url, destination, max_retries=3, chunk_size=8192):
     for attempt in range(max_retries):
         try:
             print(f"Downloading {Path(url).name} (attempt {attempt + 1}/{max_retries})...")
-            
+
             # Check if partial file exists
             temp_file = Path(f"{destination}.part")
             resume_header = {}
             if temp_file.exists():
                 resume_header = {'Range': f'bytes={temp_file.stat().st_size}-'}
                 print(f"Resuming download from {temp_file.stat().st_size} bytes")
-            
+
             response = requests.get(url, headers=resume_header, stream=True, timeout=30)
             response.raise_for_status()
-            
+
             total_size = int(response.headers.get('content-length', 0))
             if 'content-range' in response.headers:
                 # Resume mode
                 total_size = int(response.headers['content-range'].split('/')[-1])
-            
+
             mode = 'ab' if temp_file.exists() else 'wb'
             downloaded = temp_file.stat().st_size if temp_file.exists() else 0
-            
+
             with open(temp_file, mode) as f:
                 for chunk in response.iter_content(chunk_size=chunk_size):
                     if chunk:
@@ -99,13 +99,13 @@ def download_with_retry(url, destination, max_retries=3, chunk_size=8192):
                         if total_size > 0:
                             percent = (downloaded / total_size) * 100
                             print(f"\rProgress: {percent:.1f}% ({downloaded}/{total_size} bytes)", end='', flush=True)
-            
+
             print()  # New line after progress
-            
+
             # Move completed file to final destination
             temp_file.rename(destination)
             return True
-            
+
         except requests.RequestException as e:
             print(f"Download attempt {attempt + 1} failed: {e}")
             if attempt < max_retries - 1:
@@ -120,7 +120,7 @@ def download_with_retry(url, destination, max_retries=3, chunk_size=8192):
             if temp_file.exists():
                 temp_file.unlink()
             return False
-    
+
     return False
 
 def setup_venv(url):
@@ -154,10 +154,10 @@ def setup_venv(url):
             text=True,
             timeout=600  # 10 minute timeout
         )
-        
+
         if result.returncode != 0:
             raise RuntimeError(f"Extraction failed: {result.stderr}")
-            
+
     except subprocess.TimeoutExpired:
         raise RuntimeError("Extraction timed out")
     finally:
@@ -224,14 +224,17 @@ if venv_needs_reinstall:
         shutil.rmtree(VENV)
         clear_output()
 
-    HF_VENV_URL = 'https://huggingface.co/NagisaNao/ANXETY/resolve/main'
+    # Use your custom, corrected venv from your GitHub release
+    my_custom_venv_url = "https://github.com/remphanstar/LightningSdaigen/releases/download/fixed_venv.tar.lz4/fixed_venv.tar.1.lz4"
+    
     venv_config = {
-        'Classic': (f"{HF_VENV_URL}/python31113-venv-torch260-cu124-C-Classic.tar.lz4", '(3.11.13)'),
-        'default': (f"{HF_VENV_URL}/python31018-venv-torch260-cu124-C-fca.tar.lz4", '(3.10.18)')
+        'Classic': (my_custom_venv_url, '(Your Fixed 3.11)'),
+        'default': (my_custom_venv_url, '(Your Fixed 3.10)')
     }
     venv_url, py_version = venv_config.get(current_ui, venv_config['default'])
 
-    print(f"♻️ Installing VENV {py_version}, this will take some time...")
+
+    print(f"♻️ Installing your custom VENV {py_version}, this will take some time...")
     try:
         setup_venv(venv_url)
         clear_output()
