@@ -1,4 +1,4 @@
-# ~ setup.py | by ANXETY - FINAL CORRECTED VERSION ~
+# ~ setup.py | by ANXETY - FIXED VERSION ~
 
 from IPython.display import display, HTML, clear_output
 from typing import Dict, List, Tuple, Optional, Union
@@ -15,9 +15,12 @@ import sys
 import os
 
 
-nest_asyncio.apply()
+nest_asyncio.apply()  # Async support for Jupyter
 
-# --- CORRECTED: Force all paths to be based in /content ---
+
+# ======================== CONSTANTS =======================
+
+# CORRECTED: Force all paths to be based in /content
 HOME = Path('/content')
 SCR_PATH = HOME / 'ANXETY'
 SETTINGS_PATH = SCR_PATH / 'settings.json'
@@ -43,6 +46,7 @@ BASE_GITHUB_URL = "https://raw.githubusercontent.com"
 SUPPORTED_ENVS = {
     'COLAB_GPU': 'Google Colab',
     'KAGGLE_URL_BASE': 'Kaggle',
+    'LIGHTNING_AI': 'Lightning.ai'
 }
 
 # File structure configuration
