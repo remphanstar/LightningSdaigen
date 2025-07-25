@@ -17,7 +17,7 @@ CD = os.chdir
 ipySys = get_ipython().system
 ipyRun = get_ipython().run_line_magic
 
-# --- Constants and Paths ---
+# --- Constants and Paths (Now correctly read from environment) ---
 PATHS = {k: Path(v) for k, v in osENV.items() if k.endswith('_path')}
 HOME, VENV, SCR_PATH = PATHS['home_path'], PATHS['venv_path'], PATHS['scr_path']
 SETTINGS_PATH = PATHS['settings_path']
