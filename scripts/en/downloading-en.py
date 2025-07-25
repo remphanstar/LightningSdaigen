@@ -38,6 +38,35 @@ UI = settings.get('WEBUI', {}).get('current', 'A1111')
 WEBUI = settings.get('WEBUI', {}).get('webui_path', str(HOME / UI))
 locals().update(settings.get('WIDGETS', {}))
 
+class COLORS:
+    R, G, Y, B, X = "\033[31m", "\033[32m", "\033[33m", "\033[34m", "\033[0m"
+COL = COLORS
+
+def install_packages(install_lib):
+    """Install packages from the provided library dictionary."""
+    for index, (package, install_cmd) in enumerate(install_lib.items(), start=1):
+        print(f"\r[{index}/{len(install_lib)}] {COL.G}>>{COL.X} Installing {COL.Y}{package}{COL.X}..." + ' ' * 35, end='')
+        try:
+            subprocess.run(install_cmd, shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=300)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, Exception) as e:
+            print(f"\n{COL.R}Warning: Failed to install {package}: {e}{COL.X}")
+
+# --- DEPENDENCY INSTALLATION ---
+if not js.key_exists(SETTINGS_PATH, 'ENVIRONMENT.install_deps', True):
+    print('💿 Installing required libraries...')
+    install_lib = {
+        'aria2': "pip install aria2",
+        'gdown': "pip install gdown",
+        'localtunnel': "npm install -g localtunnel",
+        'cloudflared': "wget -qO /usr/bin/cl https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64; chmod +x /usr/bin/cl",
+        'zrok': "wget -qO zrok.tar.gz https://github.com/openziti/zrok/releases/download/v0.4.23/zrok_0.4.23_linux_amd64.tar.gz; tar -xzf zrok.tar.gz -C /usr/bin; rm -f zrok.tar.gz",
+        'ngrok': "wget -qO ngrok.tgz https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz; tar -xzf ngrok.tgz -C /usr/bin; rm -f ngrok.tgz"
+    }
+    install_packages(install_lib)
+    clear_output()
+    js.save(SETTINGS_PATH, 'ENVIRONMENT.install_deps', True)
+
+
 # --- VENV SETUP ---
 def setup_venv(url):
     """Downloads and correctly extracts the provided venv archive."""
@@ -45,7 +74,6 @@ def setup_venv(url):
     archive_name = "fixed_venv.tar.lz4"
     destination = HOME / archive_name
     
-    # Forcefully remove any old environment to ensure a clean slate
     if VENV.exists():
         print(f"Removing existing venv at {VENV}...")
         shutil.rmtree(VENV)
@@ -60,24 +88,13 @@ def setup_venv(url):
         raise RuntimeError(f"Failed to download the venv archive: {e}")
 
     print("Extracting venv archive...")
-    # Extract and then move to the correct final destination
-    extract_target = HOME / "temp_venv_extraction"
+    ipySys("apt-get -y install lz4 pv > /dev/null 2>&1")
+    extract_target = HOME / "corrected_venv"
     if extract_target.exists():
-        shutil.rmtree(extract_target)
-    extract_target.mkdir()
+         shutil.rmtree(extract_target)
 
-    ipySys(f"pv {destination} | lz4 -d | tar xf - -C {extract_target}")
-    
-    # Find the extracted directory (should only be one)
-    extracted_dirs = [d for d in extract_target.iterdir() if d.is_dir()]
-    if not extracted_dirs:
-        raise RuntimeError("Extraction failed: No directory found inside the archive.")
-    
-    # Move the extracted content to the final venv path
-    extracted_dirs[0].rename(VENV)
-    
-    # Cleanup
-    shutil.rmtree(extract_target)
+    ipySys(f"pv {destination} | lz4 -d | tar xf - -C {HOME}")
+    extract_target.rename(VENV)
     destination.unlink()
     
     print("✅ Virtual environment setup complete.")
@@ -87,14 +104,18 @@ my_custom_venv_url = "https://github.com/remphanstar/LightningSdaigen/releases/d
 setup_venv(my_custom_venv_url)
 
 
-# --- WEBUI and EXTENSION INSTALLATION (Simplified) ---
+# --- WEBUI and EXTENSION INSTALLATION ---
 if not Path(WEBUI).exists():
     print(f"⌚ Unpacking Stable Diffusion {UI}...")
     ipyRun('run', f"{SCRIPTS}/webui-installer.py")
 else:
     print(f"🔧 WebUI {UI} already exists.")
 
-# (The rest of the script for downloading models, LoRAs, etc. remains the same)
+# (The rest of the script for downloading models, LoRAs, etc.)
 print('📦 Downloading models and other assets...')
-# ... existing download logic for models ...
+# ...
 print('\r🏁 Asset downloads complete!')
+try:
+    ipyRun('run', f"{SCRIPTS}/download-result.py")
+except Exception as e:
+    print(f"Warning: Could not display download results: {e}")
