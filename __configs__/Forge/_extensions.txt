@@ -37,5 +37,3 @@ https://github.com/light-and-ray/sd-webui-lama-cleaner-masked-content
 https://github.com/adieyal/sd-dynamic-prompts
 https://github.com/AUTOMATIC1111/stable-diffusion-webui-wildcards
 https://github.com/altoiddealer/--sd-webui-ar-plusplus
-https://github.com/vladmandic/sd-extension-nudenet
-https://github.com/AUTOMATIC1111/stable-diffusion-webui-nsfw-censor
