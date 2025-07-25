@@ -77,7 +77,8 @@ def setup_venv(url):
         raise RuntimeError(f"Failed to download the venv archive: {e}")
 
     print("Extracting venv archive...")
-    extract_target = HOME / "final_corrected_venv"
+    # CORRECTED: Use the actual name of the directory inside your archive
+    extract_target = HOME / "final_corrected_venv" 
     if extract_target.exists():
          shutil.rmtree(extract_target)
 
