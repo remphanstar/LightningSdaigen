@@ -66,7 +66,7 @@ if not js.key_exists(SETTINGS_PATH, 'ENVIRONMENT.install_deps', True):
     js.save(SETTINGS_PATH, 'ENVIRONMENT.install_deps', True)
 
 
-# --- VENV SETUP ---
+# --- VENV SETUP (FIXED) ---
 def setup_venv(url):
     """Downloads and correctly extracts the provided venv archive."""
     CD(HOME)
@@ -87,14 +87,13 @@ def setup_venv(url):
         raise RuntimeError(f"Failed to download the venv archive: {e}")
 
     print("Extracting venv archive...")
-    extract_target = HOME / "final_corrected_venv"
-    if extract_target.exists():
-         shutil.rmtree(extract_target)
-
     ipySys(f"pv {destination} | lz4 -d | tar xf - -C {HOME}")
-    extract_target.rename(VENV)
     destination.unlink()
     
+    # Verify that the venv was created
+    if not VENV.exists():
+        raise RuntimeError("Venv extraction failed, directory not found.")
+
     print("✅ Virtual environment setup complete.")
     
 # Execute Venv Setup
