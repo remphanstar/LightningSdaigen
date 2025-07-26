@@ -66,39 +66,45 @@ if not js.key_exists(SETTINGS_PATH, 'ENVIRONMENT.install_deps', True):
     js.save(SETTINGS_PATH, 'ENVIRONMENT.install_deps', True)
 
 
-# --- VENV SETUP (FIXED) ---
-def setup_venv(url):
+# --- VENV SETUP (UPDATED WITH HF TOKEN) ---
+def setup_venv(url, token=None):
     """Downloads and correctly extracts the provided venv archive."""
     CD(HOME)
-    archive_name = "final_fixed_venv.tar.lz4"
+    archive_name = "updated_venv.tar.lz4"
     destination = HOME / archive_name
-    
+
     if VENV.exists():
         print(f"Removing existing venv at {VENV}...")
         shutil.rmtree(VENV)
 
-    print(f"Downloading your custom venv from {url}...")
+    print(f"Downloading your custom venv from Hugging Face...")
     try:
-        subprocess.run(
-            ["aria2c", "-x", "16", "-s", "16", "-k", "1M", "--console-log-level=error", "-c", "-d", str(HOME), "-o", archive_name, url],
-            check=True
-        )
+        # Prepare the aria2c command with the token
+        aria2c_cmd = [
+            "aria2c", "-x", "16", "-s", "16", "-k", "1M",
+            "--console-log-level=error", "-c",
+            "-d", str(HOME), "-o", archive_name, url
+        ]
+        if token:
+            aria2c_cmd.insert(5, f"--header=Authorization: Bearer {token}")
+
+        subprocess.run(aria2c_cmd, check=True)
     except Exception as e:
         raise RuntimeError(f"Failed to download the venv archive: {e}")
 
     print("Extracting venv archive...")
     ipySys(f"pv {destination} | lz4 -d | tar xf - -C {HOME}")
     destination.unlink()
-    
-    # Verify that the venv was created
+
     if not VENV.exists():
         raise RuntimeError("Venv extraction failed, directory not found.")
 
     print("✅ Virtual environment setup complete.")
-    
-# Execute Venv Setup
-my_custom_venv_url = "https://github.com/remphanstar/LightningSdaigen/releases/download/tag2fixed_venv.tar.lz4/final_fixed_venv.tar.lz4"
-setup_venv(my_custom_venv_url)
+
+# --- Execute Venv Setup with New URL and Token ---
+hf_token = "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"
+correct_venv_url = "https://huggingface.co/Red1618/Viso/resolve/main/updated_venv.tar.lz4"
+setup_venv(correct_venv_url, hf_token)
 
 
 # --- WEBUI and EXTENSION INSTALLATION ---
