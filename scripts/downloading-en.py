@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 from IPython import get_ipython
 from datetime import timedelta
 from pathlib import Path
+from tqdm import tqdm
 import subprocess
 import requests
 import shutil
@@ -58,6 +59,7 @@ if not js.key_exists(SETTINGS_PATH, 'ENVIRONMENT.install_deps', True):
     install_lib = {
         'system_packages': "apt-get -y update && apt-get -y install aria2 lz4 pv",
         'gdown': "pip install gdown",
+        'tqdm': "pip install tqdm",
         'localtunnel': "npm install -g localtunnel",
         'cloudflared': "wget -qO /usr/bin/cl https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64; chmod +x /usr/bin/cl",
     }
@@ -66,9 +68,9 @@ if not js.key_exists(SETTINGS_PATH, 'ENVIRONMENT.install_deps', True):
     js.save(SETTINGS_PATH, 'ENVIRONMENT.install_deps', True)
 
 
-# --- VENV SETUP (UPDATED WITH HF TOKEN) ---
-def setup_venv(url, token=None):
-    """Downloads and correctly extracts the provided venv archive."""
+# --- VENV SETUP (Using Google Drive) ---
+def setup_venv(drive_url):
+    """Downloads and correctly extracts the provided venv archive using gdown."""
     CD(HOME)
     archive_name = "updated_venv.tar.lz4"
     destination = HOME / archive_name
@@ -77,18 +79,14 @@ def setup_venv(url, token=None):
         print(f"Removing existing venv at {VENV}...")
         shutil.rmtree(VENV)
 
-    print(f"Downloading your custom venv from Hugging Face...")
+    print(f"Downloading your custom venv from Google Drive...")
     try:
-        # Prepare the aria2c command with the token
-        aria2c_cmd = [
-            "aria2c", "-x", "16", "-s", "16", "-k", "1M",
-            "--console-log-level=error", "-c",
-            "-d", str(HOME), "-o", archive_name, url
-        ]
-        if token:
-            aria2c_cmd.insert(5, f"--header=Authorization: Bearer {token}")
+        # Use gdown to download from the provided Google Drive URL
+        ipySys(f"gdown --fuzzy -O {destination} '{drive_url}'")
+        
+        if not destination.exists() or destination.stat().st_size < 1000000:
+             raise RuntimeError("Download failed. The resulting file is missing or too small.")
 
-        subprocess.run(aria2c_cmd, check=True)
     except Exception as e:
         raise RuntimeError(f"Failed to download the venv archive: {e}")
 
@@ -101,10 +99,10 @@ def setup_venv(url, token=None):
 
     print("✅ Virtual environment setup complete.")
 
-# --- Execute Venv Setup with New URL and Token ---
-hf_token = "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"
-correct_venv_url = "https://huggingface.co/Red1618/Viso/resolve/main/updated_venv.tar.lz4"
-setup_venv(correct_venv_url, hf_token)
+# --- Execute Venv Setup with the Google Drive URL ---
+# This is the direct download link for your file.
+gdrive_url = "https://drive.google.com/uc?id=1KQV6TREmnxjnD4E0XNlrnEyakoahsDZc"
+setup_venv(gdrive_url)
 
 
 # --- WEBUI and EXTENSION INSTALLATION ---
