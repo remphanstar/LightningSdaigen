@@ -49,7 +49,7 @@ SUPPORTED_ENVS = {
     'LIGHTNING_AI': 'Lightning.ai'
 }
 
-# File structure configuration
+# File structure configuration (FIXED)
 FILE_STRUCTURE = {
     'CSS': ['main-widgets.css', 'download-result.css', 'auto-cleaner.css'],
     'JS': ['main-widgets.js'],
@@ -58,8 +58,8 @@ FILE_STRUCTURE = {
         'CivitaiAPI.py', 'Manager.py', 'TunnelHub.py', '_season.py'
     ],
     'scripts': {
-        '{lang}': ['widgets-{lang}.py', 'downloading-{lang}.py'],
         '': [
+            'widgets-{lang}.py', 'downloading-{lang}.py',
             'webui-installer.py', 'launch.py', 'download-result.py', 'auto-cleaner.py',
             '_models-data.py', '_xl-models-data.py'
         ]
