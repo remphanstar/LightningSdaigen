@@ -78,10 +78,27 @@ FILE_STRUCTURE = {
         'CivitaiAPI.py', 'Manager.py', 'TunnelHub.py', '_season.py'
     ],
     'scripts': [
-        'widgets-en.py', 'downloading-en.py', 'webui-installer.py', 
+        'widgets-en.py', 'downloading-en.py', 'webui-installer.py',
         'launch.py', 'download-result.py', 'auto-cleaner.py',
-        '_models-data.py', '_xl-models-data.py', 'setup.py'
-    ]
+        '_models-data.py', '_xl-models-data.py', 'setup.py',
+        'enhanced_model_selector.py', 'requirements.txt'
+    ],
+    '__configs__': {
+        'A1111': ['config.json', 'ui-config.json', '_extensions.txt'],
+        'Classic': ['config.json', 'ui-config.json', '_extensions.txt'],
+        'ComfyUI': {
+            'Comfy-Manager': ['config.ini'],
+            'workflows': ['anxety-workflow.json'],
+            '': ['install-deps.py', '_extensions.txt', 'comfy.settings.json']
+        },
+        'Forge': ['config.json', 'ui-config.json', '_extensions.txt'],
+        'ReForge': ['config.json', 'ui-config.json', '_extensions.txt'],
+        'SD-UX': ['config.json', 'ui-config.json', '_extensions.txt'],
+        '': [
+            'card-no-preview.png', 'gradio-tunneling.py', 'notification.mp3',
+            'styles.csv', 'tagcomplete-tags-parser.py', 'user.css'
+        ]
+    }
 }
 
 
