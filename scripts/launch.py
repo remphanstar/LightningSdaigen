@@ -53,7 +53,8 @@ HOME, VENV, SETTINGS_PATH = PATHS['home_path'], PATHS['venv_path'], PATHS['setti
 # Load settings from JSON
 settings = js.read(SETTINGS_PATH)
 UI = settings.get('WEBUI', {}).get('current', 'A1111')
-WEBUI = settings.get('WEBUI', {}).get('webui_path', str(HOME / UI))
+WEBUI_PATH = settings.get('WEBUI', {}).get('webui_path', str(HOME / UI))
+WEBUI = Path(WEBUI_PATH)  # Convert to Path object
 commandline_arguments = settings.get('WIDGETS', {}).get('commandline_arguments', '')
 theme_accent = settings.get('WIDGETS', {}).get('theme_accent', 'anxety')
 ENV_NAME = settings.get('ENVIRONMENT', {}).get('env_name')
@@ -100,7 +101,7 @@ def clear_problematic_caches():
         '/tmp/__pycache__',
         '/content/__pycache__',
         str(HOME / '__pycache__'),
-        str(WEBUI / '__pycache__')
+        str(WEBUI / '__pycache__')  # Now WEBUI is a Path object
     ]
     
     for cache_dir in cache_dirs:
@@ -127,7 +128,7 @@ if __name__ == '__main__':
     print("📊 Matplotlib backend set to 'Agg' for compatibility")
 
     try:
-        CD(WEBUI)
+        CD(WEBUI)  # WEBUI is now a Path object, but CD() will convert it to string
         
         # Set additional environment variables before launch
         os.environ['CUDA_LAUNCH_BLOCKING'] = '1'  # Better CUDA error reporting
