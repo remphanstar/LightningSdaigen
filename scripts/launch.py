@@ -6,28 +6,25 @@ from pathlib import Path
 import os
 import sys
 
-# --- MATPLOTLIB FIXES ---
-# Fix matplotlib backend issues before any imports that might use it
+# --- MATPLOTLIB FIXES (BEFORE OTHER IMPORTS) ---
+# FIXED: Set matplotlib environment before any potential matplotlib imports
 os.environ['MPLBACKEND'] = 'Agg'  # Use non-interactive backend
 os.environ['MPLCONFIGDIR'] = '/tmp/matplotlib'  # Use temp directory for config
 os.environ['FONTCONFIG_PATH'] = '/etc/fonts'  # Set font config path
 os.environ['DISPLAY'] = ':0'  # Set display for headless environments
-
-# Additional environment fixes for common issues
 os.environ['PYTHONWARNINGS'] = 'ignore::UserWarning:matplotlib'  # Suppress matplotlib warnings
 os.environ['OMP_NUM_THREADS'] = '1'  # Prevent threading issues
 os.environ['MKL_NUM_THREADS'] = '1'  # Prevent Intel MKL threading issues
 
-# Clear matplotlib font cache to prevent font-related errors
-import matplotlib
-matplotlib.use('Agg')  # Force non-interactive backend
+# FIXED: Import matplotlib early and configure it properly
 try:
-    import matplotlib.pyplot as plt
-    plt.ioff()  # Turn off interactive mode
-    # Clear font cache if it exists
+    import matplotlib
+    matplotlib.use('Agg', force=True)  # Force non-interactive backend
+    
+    # Clear matplotlib font cache to prevent font-related errors
     font_cache_dirs = [
         '/tmp/matplotlib',
-        '/root/.cache/matplotlib',
+        '/root/.cache/matplotlib', 
         '/content/.cache/matplotlib'
     ]
     for cache_dir in font_cache_dirs:
@@ -39,6 +36,11 @@ try:
                 cache_path.mkdir(parents=True, exist_ok=True)
             except:
                 pass
+                
+    # Import pyplot and turn off interactive mode
+    import matplotlib.pyplot as plt
+    plt.ioff()  # Turn off interactive mode
+    
 except ImportError:
     pass  # matplotlib not available, skip
 
@@ -101,7 +103,7 @@ def clear_problematic_caches():
         '/tmp/__pycache__',
         '/content/__pycache__',
         str(HOME / '__pycache__'),
-        str(WEBUI / '__pycache__')  # Now WEBUI is a Path object
+        str(WEBUI / '__pycache__')  # WEBUI is now a Path object
     ]
     
     for cache_dir in cache_dirs:
@@ -128,7 +130,7 @@ if __name__ == '__main__':
     print("📊 Matplotlib backend set to 'Agg' for compatibility")
 
     try:
-        CD(WEBUI)  # WEBUI is now a Path object, but CD() will convert it to string
+        CD(WEBUI)
         
         # Set additional environment variables before launch
         os.environ['CUDA_LAUNCH_BLOCKING'] = '1'  # Better CUDA error reporting
