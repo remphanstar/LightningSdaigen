@@ -1,11 +1,50 @@
 # ~ launch.py | by ANXETY - FIXED VERSION ~
 
+import os
+from pathlib import Path
+
+# --- MATPLOTLIB FIXES (BEFORE OTHER IMPORTS) ---
+# FIXED: Set matplotlib environment before any potential matplotlib imports
+os.environ['MPLBACKEND'] = 'Agg'  # Use non-interactive backend
+os.environ['MPLCONFIGDIR'] = '/tmp/matplotlib'  # Use temp directory for config
+os.environ['FONTCONFIG_PATH'] = '/etc/fonts'  # Set font config path
+os.environ['DISPLAY'] = ':0'  # Set display for headless environments
+os.environ['PYTHONWARNINGS'] = 'ignore::UserWarning:matplotlib'  # Suppress matplotlib warnings
+os.environ['OMP_NUM_THREADS'] = '1'  # Prevent threading issues
+os.environ['MKL_NUM_THREADS'] = '1'  # Prevent Intel MKL threading issues
+
+# FIXED: Import matplotlib early and configure it properly
+try:
+    import matplotlib
+    matplotlib.use('Agg', force=True)  # Force non-interactive backend
+
+    # Clear matplotlib font cache to prevent font-related errors
+    font_cache_dirs = [
+        '/tmp/matplotlib',
+        '/root/.cache/matplotlib', 
+        '/content/.cache/matplotlib'
+    ]
+    for cache_dir in font_cache_dirs:
+        cache_path = Path(cache_dir)
+        if cache_path.exists():
+            import shutil
+            try:
+                shutil.rmtree(cache_path)
+                cache_path.mkdir(parents=True, exist_ok=True)
+            except:
+                pass
+
+    # Import pyplot and turn off interactive mode
+    import matplotlib.pyplot as plt
+    plt.ioff()  # Turn off interactive mode
+
+except ImportError:
+    pass  # matplotlib not available, skip
+
 import json_utils as js
 from IPython import get_ipython
-from pathlib import Path
 import subprocess
 import sys
-import os
 
 # --- ENVIRONMENT SETUP ---
 osENV = os.environ
