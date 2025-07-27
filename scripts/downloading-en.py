@@ -146,7 +146,7 @@ def setup_venv(url):
     print("✅ Virtual environment setup complete.")
 
 # FIXED: Updated venv URL (moved to Google Drive as mentioned)
-my_custom_venv_url = "https://drive.google.com/uc?id=YOUR_GOOGLE_DRIVE_FILE_ID"  # Update with actual Google Drive file ID
+my_custom_venv_url = "https://drive.google.com/file/d/19IbRWRE9QZLJMt90kGb6oiWhUdsOTp8r/view?usp=sharing"  # Update with actual Google Drive file ID
 setup_venv(my_custom_venv_url)
 
 # WEBUI and EXTENSION INSTALLATION
