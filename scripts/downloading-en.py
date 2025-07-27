@@ -17,7 +17,7 @@ def verify_dependencies():
     """Verify and install required tools."""
     required_tools = {
         'git': 'git',
-        'curl': 'curl',
+        'curl': 'curl', 
         'wget': 'wget',
         'aria2c': 'aria2',
         'lz4': 'lz4',
@@ -106,7 +106,20 @@ def setup_venv():
 
     print(f"🌱 Creating a new virtual environment at {VENV}...")
     try:
-        subprocess.run([sys.executable, '-m', 'venv', str(VENV)], check=True, capture_output=True, text=True)
+        # Create venv without pip to avoid ensurepip errors in some environments
+        subprocess.run([sys.executable, '-m', 'venv', str(VENV), '--without-pip'], check=True, capture_output=True, text=True)
+        
+        # Manually install pip using get-pip.py
+        get_pip_url = "https://bootstrap.pypa.io/get-pip.py"
+        get_pip_path = SCR_PATH / "get-pip.py"
+        
+        # Download get-pip.py
+        subprocess.run(['curl', '-sLo', str(get_pip_path), get_pip_url], check=True)
+        
+        # Run get-pip.py with the venv's python
+        venv_python = VENV / 'bin' / 'python'
+        subprocess.run([str(venv_python), str(get_pip_path)], check=True, capture_output=True, text=True)
+        
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"FATAL: Failed to create the virtual environment. Error:\n{e.stderr}")
 
