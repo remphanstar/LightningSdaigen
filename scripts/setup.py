@@ -1,4 +1,4 @@
-# ~ setup.py | by ANXETY - FIXED VERSION ~
+# ~ setup.py | by ANXETY - PLATFORM AGNOSTIC FIXED VERSION ~
 
 from IPython.display import display, HTML, clear_output
 from typing import Dict, List, Tuple, Optional, Union
@@ -20,8 +20,28 @@ nest_asyncio.apply()  # Async support for Jupyter
 
 # ======================== CONSTANTS =======================
 
-# CORRECTED: Force all paths to be based in /content
-HOME = Path('/content')
+def detect_platform_home():
+    """Detect the appropriate home directory based on platform."""
+    if 'COLAB_GPU' in os.environ or '/content' in os.getcwd():
+        return Path('/content')
+    elif 'KAGGLE_URL_BASE' in os.environ or '/kaggle' in os.getcwd():
+        return Path('/kaggle/working')
+    elif '/teamspace/' in os.getcwd() or any('LIGHTNING' in k for k in os.environ):
+        return Path('/teamspace/studios/this_studio')
+    elif '/workspace/' in os.getcwd():
+        return Path('/workspace')
+    else:
+        # Default fallback - try to detect from current working directory
+        cwd = Path.cwd()
+        if cwd.name == 'content':
+            return cwd
+        elif 'content' in cwd.parts:
+            return Path('/content')
+        else:
+            return cwd.parent if cwd.name == 'ANXETY' else cwd
+
+# FIXED: Platform-agnostic path detection
+HOME = detect_platform_home()
 SCR_PATH = HOME / 'ANXETY'
 SETTINGS_PATH = SCR_PATH / 'settings.json'
 VENV_PATH = HOME / 'venv'
@@ -49,7 +69,7 @@ SUPPORTED_ENVS = {
     'LIGHTNING_AI': 'Lightning.ai'
 }
 
-# File structure configuration (FIXED)
+# FIXED: File structure - scripts are now directly in scripts folder
 FILE_STRUCTURE = {
     'CSS': ['main-widgets.css', 'download-result.css', 'auto-cleaner.css'],
     'JS': ['main-widgets.js'],
@@ -57,13 +77,11 @@ FILE_STRUCTURE = {
         'json_utils.py', 'webui_utils.py', 'widget_factory.py',
         'CivitaiAPI.py', 'Manager.py', 'TunnelHub.py', '_season.py'
     ],
-    'scripts': {
-        '': [
-            'widgets-{lang}.py', 'downloading-{lang}.py',
-            'webui-installer.py', 'launch.py', 'download-result.py', 'auto-cleaner.py',
-            '_models-data.py', '_xl-models-data.py'
-        ]
-    }
+    'scripts': [
+        'widgets-en.py', 'downloading-en.py', 'webui-installer.py', 
+        'launch.py', 'download-result.py', 'auto-cleaner.py',
+        '_models-data.py', '_xl-models-data.py', 'setup.py'
+    ]
 }
 
 
@@ -151,11 +169,18 @@ def setup_module_folder(modules_folder = None):
 # =================== ENVIRONMENT SETUP ====================
 
 def detect_environment():
-    """Detect runtime environment."""
-    for var, name in SUPPORTED_ENVS.items():
-        if var in os.environ:
-            return name
-    raise EnvironmentError(f"Unsupported environment. Supported: {', '.join(SUPPORTED_ENVS.values())}")
+    """FIXED: Improved environment detection."""
+    if 'COLAB_GPU' in os.environ or '/content' in os.getcwd():
+        return 'Google Colab'
+    elif 'KAGGLE_URL_BASE' in os.environ or '/kaggle' in os.getcwd():
+        return 'Kaggle'
+    elif '/teamspace/' in os.getcwd() or any('LIGHTNING' in k for k in os.environ):
+        return 'Lightning.ai'
+    elif '/workspace/' in os.getcwd():
+        return 'Vast.ai'
+    else:
+        print("Warning: Unknown environment, assuming Colab compatibility")
+        return 'Google Colab'
 
 def parse_fork_arg(fork_arg):
     """Parse fork argument into user/repo."""
@@ -187,25 +212,19 @@ def create_environment_data(env, lang, fork_user, fork_repo, branch):
 
 # ===================== DOWNLOAD LOGIC =====================
 
-def _format_lang_path(path: str, lang: str) -> str:
-    """Format path with language placeholder."""
-    return path.format(lang=lang) if '{lang}' in path else path
-
 def generate_file_list(structure: Dict, base_url: str, lang: str) -> List[Tuple[str, Path]]:
-    """Generate flat list of (url, path) from nested structure."""
+    """FIXED: Generate flat list of (url, path) from nested structure - no lang folders."""
     def walk(struct: Dict, path_parts: List[str]) -> List[Tuple[str, Path]]:
         items = []
         for key, value in struct.items():
-            current_key = _format_lang_path(key, lang)
-            current_path = [*path_parts, current_key] if current_key else path_parts
+            current_path = [*path_parts, key] if key else path_parts
             if isinstance(value, dict):
                 items.extend(walk(value, current_path))
             else:
                 url_path = "/".join(current_path)
                 for file in value:
-                    formatted_file = _format_lang_path(file, lang)
-                    url = f"{base_url}/{url_path}/{formatted_file}" if url_path else f"{base_url}/{formatted_file}"
-                    file_path = SCR_PATH / "/".join(current_path) / formatted_file
+                    url = f"{base_url}/{url_path}/{file}" if url_path else f"{base_url}/{file}"
+                    file_path = SCR_PATH / "/".join(current_path) / file
                     items.append((url, file_path))
         return items
     return walk(structure, [])
@@ -284,6 +303,9 @@ async def main_async(args=None):
     args, _ = parser.parse_known_args(args)
     try:
         env = detect_environment()
+        print(f"🌍 Detected environment: {env}")
+        print(f"📁 Using home directory: {HOME}")
+        
         user, repo = parse_fork_arg(args.fork)
         if not args.skip_download:
             await download_files_async(args.lang, user, repo, args.branch, args.log)
