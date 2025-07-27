@@ -1,4 +1,4 @@
-# ~ download.py | by ANXETY - FINAL CORRECTED VERSION ~
+# ~ downloading-en.py | by ANXETY - Modular Fix Version ~
 
 from webui_utils import handle_setup_timer
 from Manager import m_download, m_clone
@@ -30,14 +30,14 @@ ipyRun = get_ipython().run_line_magic
 
 # --- Constants and Paths ---
 PATHS = {k: Path(v) for k, v in osENV.items() if k.endswith('_path')}
-HOME, VENV, SCR_PATH = PATHS['home_path'], PATHS['venv_path'], PATHS['scr_path']
+HOME, VENV_PATH, SCR_PATH = PATHS['home_path'], PATHS['venv_path'], PATHS['scr_path']
 SETTINGS_PATH = PATHS['settings_path']
 SCRIPTS = SCR_PATH / 'scripts'
 
 # --- Load Settings ---
 settings = js.read(SETTINGS_PATH)
 UI = settings.get('WEBUI', {}).get('current', 'A1111')
-WEBUI = settings.get('WEBUI', {}).get('webui_path', str(HOME / UI))
+WEBUI_PATH = HOME / UI
 locals().update(settings.get('WIDGETS', {}))
 
 class COLORS:
@@ -68,45 +68,55 @@ if not js.key_exists(SETTINGS_PATH, 'ENVIRONMENT.install_deps', True):
     js.save(SETTINGS_PATH, 'ENVIRONMENT.install_deps', True)
 
 
-# --- VENV SETUP (Using Google Drive) ---
+# --- VENV SETUP (CRITICAL FIX) ---
 def setup_venv(drive_url):
-    """Downloads and correctly extracts the provided venv archive using gdown."""
+    """Downloads, extracts, and correctly renames the venv archive."""
     CD(HOME)
     archive_name = "updated_venv.tar.lz4"
     destination = HOME / archive_name
+    extracted_name = HOME / "venv_new"  # This is the actual name inside the archive
 
-    if VENV.exists():
-        print(f"Removing existing venv at {VENV}...")
-        shutil.rmtree(VENV)
+    if VENV_PATH.exists():
+        print(f"✅ Virtual environment already exists at {VENV_PATH}.")
+        return
 
-    print(f"Downloading your custom venv from Google Drive...")
-    try:
-        # Use gdown to download from the provided Google Drive URL
-        ipySys(f"gdown --fuzzy -O {destination} '{drive_url}'")
-        
-        if not destination.exists() or destination.stat().st_size < 1000000:
-             raise RuntimeError("Download failed. The resulting file is missing or too small.")
+    # If an old extraction exists, just rename it
+    if extracted_name.exists():
+        print(f"    Found existing '{extracted_name.name}', renaming to '{VENV_PATH.name}'...")
+        shutil.move(extracted_name, VENV_PATH)
+        print("✅ Virtual environment setup complete.")
+        return
 
-    except Exception as e:
-        raise RuntimeError(f"Failed to download the venv archive: {e}")
+    print("Downloading virtual environment from Google Drive...")
+    # Use gdown for reliable Google Drive downloads
+    ipySys(f"gdown --fuzzy -O {destination} '{drive_url}'")
+
+    if not destination.exists() or destination.stat().st_size < 1000000:
+         raise RuntimeError("Download failed. The venv archive is missing or too small.")
 
     print("Extracting venv archive...")
     ipySys(f"pv {destination} | lz4 -d | tar xf - -C {HOME}")
     destination.unlink()
 
-    if not VENV.exists():
-        raise RuntimeError("Venv extraction failed, directory not found.")
+    # *** THE FIX: Rename the extracted folder to what the script expects ***
+    if extracted_name.exists():
+        print(f"    Renaming '{extracted_name.name}' to '{VENV_PATH.name}'...")
+        shutil.move(extracted_name, VENV_PATH)
+    else:
+        # This will now correctly check for VENV_PATH after the potential rename
+        if not VENV_PATH.exists():
+            raise RuntimeError("Venv extraction failed, target directory not found.")
 
     print("✅ Virtual environment setup complete.")
 
-# --- Execute Venv Setup with the Google Drive URL ---
-# This is the direct download link for your file.
-gdrive_url = "https://drive.google.com/file/d/19IbRWRE9QZLJMt90kGb6oiWhUdsOTp8r/view?usp=sharing"
+
+# --- Execute Venv Setup with the Corrected Link ---
+gdrive_url = "https://drive.google.com/uc?id=19IbRWRE9QZLJMt90kGb6oiWhUdsOTp8r"
 setup_venv(gdrive_url)
 
 
 # --- WEBUI and EXTENSION INSTALLATION ---
-if not Path(WEBUI).exists():
+if not WEBUI_PATH.exists():
     print(f"⌚ Unpacking Stable Diffusion {UI}...")
     ipyRun('run', f"{SCRIPTS}/webui-installer.py")
 else:
@@ -246,7 +256,7 @@ def handle_submodels(selection, num_selection, model_dict, dst_dir, base_url):
 line = ""
 line = handle_submodels(model, model_num, model_list, model_dir, line)
 line = handle_submodels(vae, vae_num, vae_list, vae_dir, line)
-line = handle_submodels(lora, lora_list, lora_dir, line) # Lora doesn't use num_selection
+line = handle_submodels(lora, None, lora_list, lora_dir, line) # Lora doesn't use num_selection
 line = handle_submodels(controlnet, controlnet_num, controlnet_list, control_dir, line)
 
 download(line)
