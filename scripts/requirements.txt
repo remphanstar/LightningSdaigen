@@ -1,11 +1,11 @@
---index-url https://download.pytorch.org/whl/cu124
-torch==2.6.0
-torchvision==0.21.0
-torchaudio==2.6.0
-xformers
-numpy==1.26.4
-transformers==4.46.0
-diffusers==0.31.0
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.7.1
+torchvision==0.22.1
+torchaudio==2.7.1
+xformers==0.0.31
+numpy==1.26.3
+transformers==4.45.2
+diffusers==0.30.3
 accelerate==1.1.1
 safetensors==0.4.5
 opencv-python==4.10.0.84
@@ -20,11 +20,11 @@ matplotlib==3.9.4
 omegaconf==2.3.0
 tensorboard==2.18.0
 psutil==6.1.0
-rembg
-supervision
-ifnude
-hydra-core
-segment-anything
-pycocotools
-pytorch-lightning
-basicsr
+rembg==2.0.59
+supervision==0.26.0
+ifnude==0.0.3
+hydra-core==1.3.2
+segment-anything==1.0.0
+pycocotools==2.0.8
+pytorch-lightning==2.4.0
+basicsr==1.4.2
