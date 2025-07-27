@@ -40,6 +40,24 @@ UI = settings.get('WEBUI', {}).get('current', 'A1111')
 WEBUI_PATH = HOME / UI
 locals().update(settings.get('WIDGETS', {}))
 
+# --- FIX: Load Directory Path Variables ---
+webui_settings = settings.get('WEBUI', {})
+model_dir = webui_settings.get('model_dir')
+vae_dir = webui_settings.get('vae_dir')
+lora_dir = webui_settings.get('lora_dir')
+embed_dir = webui_settings.get('embed_dir')
+extension_dir = webui_settings.get('extension_dir')
+control_dir = webui_settings.get('control_dir')
+upscale_dir = webui_settings.get('upscale_dir')
+clip_dir = webui_settings.get('clip_dir')
+unet_dir = webui_settings.get('unet_dir')
+vision_dir = webui_settings.get('vision_dir')
+encoder_dir = webui_settings.get('encoder_dir')
+diffusion_dir = webui_settings.get('diffusion_dir')
+config_dir = webui_settings.get('config_dir')
+adetailer_dir = webui_settings.get('adetailer_dir')
+
+
 class COLORS:
     R, G, Y, B, X = "\033[31m", "\033[32m", "\033[33m", "\033[34m", "\033[0m"
 COL = COLORS
@@ -150,7 +168,8 @@ PREFIX_MAP = {
     'diffusion': (diffusion_dir, '$diff'), 'config': (config_dir, '$cfg')
 }
 for dir_path, _ in PREFIX_MAP.values():
-    os.makedirs(dir_path, exist_ok=True)
+    if dir_path: # Ensure the path is not None before creating
+        os.makedirs(dir_path, exist_ok=True)
 
 def _clean_url(url):
     url = url.replace('/blob/', '/resolve/') if 'huggingface.co' in url else url
@@ -250,13 +269,14 @@ def handle_submodels(selection, num_selection, model_dict, dst_dir, base_url):
         } for model in selected
     }
     for model in unique_models.values():
-        base_url += f"{model['url']} {model['dst_dir']} {model['name']}, "
+        base_url += f"lora:{model['url']} {model['dst_dir']} {model['name']},"
     return base_url
 
 line = ""
 line = handle_submodels(model, model_num, model_list, model_dir, line)
 line = handle_submodels(vae, vae_num, vae_list, vae_dir, line)
-line = handle_submodels(lora, None, lora_list, lora_dir, line) # Lora doesn't use num_selection
+# --- FIX: Corrected the arguments for the lora handle_submodels call ---
+line = handle_submodels(lora, None, lora_list, lora_dir, line)
 line = handle_submodels(controlnet, controlnet_num, controlnet_list, control_dir, line)
 
 download(line)
