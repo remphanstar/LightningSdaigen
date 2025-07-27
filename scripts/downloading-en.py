@@ -127,24 +127,34 @@ def setup_venv(url):
 
     print(f"Downloading custom venv from {url}...")
     try:
+        # Use gdown to handle the Google Drive URL correctly
         subprocess.run(
-            ["aria2c", "-x", "16", "-s", "16", "-k", "1M", "--console-log-level=error", "-c", "-d", str(HOME), "-o", archive_name, url],
-            check=True
+            ["gdown", "--fuzzy", "-O", str(destination), url],
+            check=True,
+            stdout=subprocess.DEVNULL, 
+            stderr=subprocess.DEVNULL
         )
     except Exception as e:
-        raise RuntimeError(f"Failed to download the venv archive: {e}")
+        raise RuntimeError(f"Failed to download the venv archive with gdown: {e}")
 
     print("Extracting venv archive...")
-    extract_target = HOME / "final_corrected_venv"
+    # The extraction command assumes the downloaded file is named 'final_corrected_venv' inside the tarball
+    extract_target = HOME / "final_corrected_venv" 
     if extract_target.exists():
          shutil.rmtree(extract_target)
 
-    ipySys(f"pv {destination} | lz4 -d | tar xf - -C {HOME}")
-    extract_target.rename(VENV)
-    destination.unlink()
+    # Run the extraction and handle potential errors
+    try:
+        ipySys(f"pv {destination} | lz4 -d | tar xf - -C {HOME}")
+        # Check if the directory was created
+        if not extract_target.exists():
+            raise FileNotFoundError("Extraction failed, target directory not found.")
+        extract_target.rename(VENV)
+        destination.unlink()
+    except Exception as e:
+        raise RuntimeError(f"Failed to extract or rename the venv: {e}")
     
     print("✅ Virtual environment setup complete.")
-
 # FIXED: Updated venv URL (moved to Google Drive as mentioned)
 my_custom_venv_url = "https://drive.google.com/file/d/19IbRWRE9QZLJMt90kGb6oiWhUdsOTp8r/view?usp=sharing"  # Update with actual Google Drive file ID
 setup_venv(my_custom_venv_url)
