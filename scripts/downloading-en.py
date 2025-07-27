@@ -101,7 +101,7 @@ def setup_venv(drive_url):
 
 # --- Execute Venv Setup with the Google Drive URL ---
 # This is the direct download link for your file.
-gdrive_url = "https://drive.google.com/uc?id=1KQV6TREmnxjnD4E0XNlrnEyakoahsDZc"
+gdrive_url = "https://drive.google.com/file/d/19IbRWRE9QZLJMt90kGb6oiWhUdsOTp8r/view?usp=sharing"
 setup_venv(gdrive_url)
 
 
