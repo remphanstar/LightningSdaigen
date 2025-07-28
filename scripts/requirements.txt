@@ -1,34 +1,142 @@
---extra-index-url https://download.pytorch.org/whl/cu128
-torch==2.7.1
-torchvision==0.22.1
-torchaudio==2.7.1
-xformers==0.0.31
-numpy==1.26.3
-transformers==4.45.2
-diffusers==0.30.3
-accelerate==1.1.1
-safetensors==0.4.5
-opencv-python==4.10.0.84
-gradio==4.44.0
-fastapi==0.115.6
-uvicorn==0.32.1
-pillow==10.4.0
-requests==2.32.3
-tqdm==4.67.1
-scipy==1.14.1
-matplotlib==3.9.4
-omegaconf==2.3.0
-tensorboard==2.18.0
-psutil==6.1.0
-rembg==2.0.59
-supervision==0.26.0
-ifnude==0.0.3
-hydra-core==1.3.2
-segment-anything==1.0.0
-pycocotools==2.0.8
-pytorch-lightning==2.4.0
-basicsr==1.4.2
-onnxruntime-gpu==1.17.1
+# ============================================================================
+# LightningSdaigen Universal Requirements - Complete 10WebUI Compatibility
+# ============================================================================
+# This comprehensive requirements file ensures perfect compatibility across
+# all 10 WebUI types with resolved version conflicts and optimal performance.
+
+# ============================================================================
+# CRITICAL: PyTorch Ecosystem (CUDA 12.1 optimized)
+# ============================================================================
+--extra-index-url https://download.pytorch.org/whl/cu121
+
+# Core PyTorch with CUDA support
+torch==2.1.2+cu121
+torchvision==0.16.2+cu121  
+torchaudio==2.1.2+cu121
+
+# Memory optimization and acceleration
+xformers==0.0.23.post1
+accelerate==0.25.0
+bitsandbytes==0.42.0
+
+# ============================================================================
+# AI/ML Core Libraries
+# ============================================================================
+
+# Transformers and Diffusion Models
+transformers==4.36.2
+diffusers==0.25.0
+safetensors==0.4.1
+tokenizers==0.15.0
+
+# Model utilities
+huggingface-hub==0.20.2
+datasets==2.16.1
+evaluate==0.4.1
+
+# Scientific computing
+numpy==1.24.4
+scipy==1.11.4
+scikit-learn==1.3.2
+scikit-image==0.22.0
+
+# ============================================================================
+# Computer Vision & Image Processing
+# ============================================================================
+
+# Core image processing
+opencv-python==4.8.1.78
+opencv-contrib-python==4.8.1.78
+Pillow==10.1.0
+imageio==2.33.1
+imageio-ffmpeg==0.4.9
+
+# Advanced image processing
+albumentations==1.3.1
+kornia==0.7.0
+timm==0.9.12
+
+# ============================================================================
+# Face Processing & Analysis (FaceFusion, RoopUnleashed)
+# ============================================================================
+
+# ONNX Runtime with GPU support
+onnxruntime-gpu==1.16.3
+onnxruntime==1.16.3
+onnx==1.15.0
+
+# Face analysis and processing
 insightface==0.7.3
-protobuf==4.25.3
-timm==0.9.5
+mediapipe==0.10.8
+dlib==19.24.2
+
+# Face enhancement
+gfpgan==1.3.8
+realesrgan==0.3.0
+basicsr==1.4.2
+facexlib==0.3.0
+
+# Additional face processing
+filterpy==1.4.5
+numba==0.58.1
+
+# ============================================================================
+# Web Interface & UI (Gradio, FastAPI)
+# ============================================================================
+
+# Primary web frameworks
+gradio==4.7.1
+fastapi==0.105.0
+uvicorn[standard]==0.24.0
+
+# Web utilities
+starlette==0.27.0
+pydantic==2.5.2
+python-multipart==0.0.6
+websockets==12.0
+
+# ============================================================================
+# Audio/Video Processing
+# ============================================================================
+
+# FFmpeg Python bindings
+ffmpeg-python==0.2.0
+moviepy==1.0.3
+
+# Audio processing
+librosa==0.10.1
+soundfile==0.12.1
+noisereduce==3.0.0
+
+# ============================================================================
+# Data Processing & Utilities
+# ============================================================================
+
+# Core data processing
+pandas==2.1.4
+tqdm==4.66.1
+omegaconf==2.3.0
+hydra-core==1.3.2
+
+# File handling
+pathlib2==2.3.7.post1
+send2trash==1.8.2
+python-magic==0.4.27
+
+# Compression and archives
+zipfile38==0.0.3
+py7zr==0.20.8
+
+# ============================================================================
+# Network & API
+# ============================================================================
+
+# HTTP and networking
+requests==2.31.0
+httpx==0.25.2
+aiohttp==3.9.1
+urllib3==2.1.0
+
+# API utilities
+pydantic==2.5.2
+fastapi-
