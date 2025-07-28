@@ -17,18 +17,18 @@ def verify_dependencies():
     """Verify and install required tools."""
     required_tools = {
         'git': 'git',
-        'curl': 'curl', 
+        'curl': 'curl',
         'wget': 'wget',
         'aria2c': 'aria2',
         'lz4': 'lz4',
         'pv': 'pv'
     }
-    
+
     missing = []
     for tool, package in required_tools.items():
         if not shutil.which(tool):
             missing.append(package)
-    
+
     if missing:
         print(f"📦 Installing missing tools: {missing}")
         try:
@@ -137,49 +137,50 @@ COL = COLORS
 
 # --- VENV SETUP using requirements.txt ---
 def setup_venv():
-    """Create a fresh virtual environment and install dependencies from requirements.txt."""
+    """Create a virtual environment if it doesn't exist and install dependencies."""
     CD(HOME)
-    
+
     if VENV.exists():
-        print(f"🗑️ Removing existing venv at {VENV}...")
-        shutil.rmtree(VENV)
+        print(f"✅ Virtual environment already exists at {VENV}. Skipping creation.")
+        return
 
     print(f"🌱 Creating a new virtual environment at {VENV}...")
     try:
         # Create venv without pip to avoid ensurepip errors in some environments
         subprocess.run([sys.executable, '-m', 'venv', str(VENV), '--without-pip'], check=True, capture_output=True, text=True)
-        
+
         # Manually install pip using get-pip.py
         get_pip_url = "https://bootstrap.pypa.io/get-pip.py"
         get_pip_path = SCR_PATH / "get-pip.py"
-        
+
         # Download get-pip.py
         subprocess.run(['curl', '-sLo', str(get_pip_path), get_pip_url], check=True)
-        
+
         # Run get-pip.py with the venv's python
         venv_python = VENV / 'bin' / 'python'
         subprocess.run([str(venv_python), str(get_pip_path)], check=True, capture_output=True, text=True)
-        
+
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"FATAL: Failed to create the virtual environment. Error:\n{e.stderr}")
 
     requirements_path = SCRIPTS / "requirements.txt"
     if not requirements_path.exists():
         raise RuntimeError(f"FATAL: requirements.txt not found at {requirements_path}")
-        
+
     pip_executable = VENV / 'bin' / 'pip'
     print(f"📦 Installing all dependencies from {requirements_path}...")
     install_command = f"{pip_executable} install -r {requirements_path}"
-    
+
     process = subprocess.Popen(install_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
     for line in iter(process.stdout.readline, ''):
         print(line, end='')
-    
+
     return_code = process.wait()
     if return_code != 0:
         raise RuntimeError("Failed to install dependencies from requirements.txt.")
 
     print("✅ Virtual environment setup complete.")
+
 
 # Execute Venv Setup
 setup_venv()
@@ -220,19 +221,19 @@ extension_repo = []
 
 # FIXED: Use webui_settings for directory paths
 PREFIX_MAP = {
-    'model': (webui_settings.get('model_dir', ''), '$ckpt'), 
-    'vae': (webui_settings.get('vae_dir', ''), '$vae'), 
+    'model': (webui_settings.get('model_dir', ''), '$ckpt'),
+    'vae': (webui_settings.get('vae_dir', ''), '$vae'),
     'lora': (webui_settings.get('lora_dir', ''), '$lora'),
-    'embed': (webui_settings.get('embed_dir', ''), '$emb'), 
-    'extension': (webui_settings.get('extension_dir', ''), '$ext'), 
+    'embed': (webui_settings.get('embed_dir', ''), '$emb'),
+    'extension': (webui_settings.get('extension_dir', ''), '$ext'),
     'adetailer': (webui_settings.get('adetailer_dir', ''), '$ad'),
-    'control': (webui_settings.get('control_dir', ''), '$cnet'), 
-    'upscale': (webui_settings.get('upscale_dir', ''), '$ups'), 
+    'control': (webui_settings.get('control_dir', ''), '$cnet'),
+    'upscale': (webui_settings.get('upscale_dir', ''), '$ups'),
     'clip': (webui_settings.get('clip_dir', ''), '$clip'),
-    'unet': (webui_settings.get('unet_dir', ''), '$unet'), 
-    'vision': (webui_settings.get('vision_dir', ''), '$vis'), 
+    'unet': (webui_settings.get('unet_dir', ''), '$unet'),
+    'vision': (webui_settings.get('vision_dir', ''), '$vis'),
     'encoder': (webui_settings.get('encoder_dir', ''), '$enc'),
-    'diffusion': (webui_settings.get('diffusion_dir', ''), '$diff'), 
+    'diffusion': (webui_settings.get('diffusion_dir', ''), '$diff'),
     'config': (webui_settings.get('config_dir', ''), '$cfg')
 }
 
@@ -275,7 +276,7 @@ def manual_download(url, dst_dir, file_name=None, prefix=None):
     print(f"   Directory: {dst_dir}")
     print(f"   Filename: {file_name}")
     print(f"   Prefix: {prefix}")
-    
+
     if 'civitai' in url:
         token = widget_settings.get('civitai_token', '')
         if not token:
@@ -284,13 +285,13 @@ def manual_download(url, dst_dir, file_name=None, prefix=None):
         print(f"🎯 Processing CivitAI URL...")
         api = CivitAiAPI(token)
         data = api.validate_download(url, file_name)
-        if not data: 
+        if not data:
             print(f"❌ Failed to get CivitAI download data for {url}")
             return
         url = data.download_url
         file_name = data.model_name
         print(f"✅ CivitAI processed: {file_name}")
-        
+
     print(f"⬇️ Downloading: {file_name or 'file'} to {dst_dir}")
     download_cmd = f"{url} {dst_dir} {file_name or ''}"
     print(f"📋 m_download command: '{download_cmd}'")
@@ -326,10 +327,10 @@ def _parse_selection_numbers(num_str, max_num):
 def handle_submodels(selection, num_selection, model_dict, dst_dir, base_url):
     selected = []
     selections = selection if isinstance(selection, (list, tuple)) else [selection]
-    
+
     print(f"🔍 Processing selection: {selections}")
     print(f"📊 Available in {type(model_dict).__name__}: {list(model_dict.keys())[:5]}..." if model_dict else "Empty model dict")
-    
+
     for sel in selections:
         if sel.lower() != 'none':
             if sel == 'ALL':
@@ -341,7 +342,7 @@ def handle_submodels(selection, num_selection, model_dict, dst_dir, base_url):
                 print(f"✅ Selected: {sel}")
             else:
                 print(f"⚠️ Selection '{sel}' not found in model dictionary")
-                
+
     if num_selection:
         max_num = len(model_dict)
         numbers = _parse_selection_numbers(num_selection, max_num)
@@ -352,7 +353,7 @@ def handle_submodels(selection, num_selection, model_dict, dst_dir, base_url):
                 item = model_dict[name]
                 selected.extend(item if isinstance(item, list) else [item])
                 print(f"✅ Selected by number {num}: {name}")
-                
+
     unique_models = {
         (model.get('name') or os.path.basename(model['url'])): {
             'url': model['url'],
@@ -360,23 +361,23 @@ def handle_submodels(selection, num_selection, model_dict, dst_dir, base_url):
             'name': model.get('name') or os.path.basename(model['url'])
         } for model in selected
     }
-    
+
     print(f"📋 Final selection: {len(unique_models)} unique models")
-    
+
     # Build download entries list instead of string concatenation
     download_entries = []
     for model in unique_models.values():
         entry = f"{model['url']} {model['dst_dir']} {model['name']}"
         download_entries.append(entry)
         print(f"   - {model['name']} -> {model['dst_dir']}")
-    
+
     # Join entries with proper comma separation
     if download_entries:
         if base_url:
             base_url += ", " + ", ".join(download_entries)
         else:
             base_url = ", ".join(download_entries)
-        
+
     return base_url
 
 # Process downloads
@@ -398,37 +399,37 @@ else:
 # FIXED: Use webui_settings for directory paths in downloads
 print("\n🎯 Processing model selections...")
 line = handle_submodels(
-    widget_settings.get('model', []), 
-    widget_settings.get('model_num', ''), 
-    model_list, 
-    webui_settings.get('model_dir', ''), 
+    widget_settings.get('model', []),
+    widget_settings.get('model_num', ''),
+    model_list,
+    webui_settings.get('model_dir', ''),
     line
 )
 
 print("\n🎨 Processing VAE selections...")
 line = handle_submodels(
-    widget_settings.get('vae', ''), 
-    widget_settings.get('vae_num', ''), 
-    vae_list, 
-    webui_settings.get('vae_dir', ''), 
+    widget_settings.get('vae', ''),
+    widget_settings.get('vae_num', ''),
+    vae_list,
+    webui_settings.get('vae_dir', ''),
     line
 )
 
 print("\n✨ Processing LoRA selections...")
 line = handle_submodels(
-    widget_settings.get('lora', []), 
-    '', 
-    lora_list, 
-    webui_settings.get('lora_dir', ''), 
+    widget_settings.get('lora', []),
+    '',
+    lora_list,
+    webui_settings.get('lora_dir', ''),
     line
 )
 
 print("\n🎮 Processing ControlNet selections...")
 line = handle_submodels(
-    widget_settings.get('controlnet', []), 
-    widget_settings.get('controlnet_num', ''), 
-    controlnet_list, 
-    webui_settings.get('control_dir', ''), 
+    widget_settings.get('controlnet', []),
+    widget_settings.get('controlnet_num', ''),
+    controlnet_list,
+    webui_settings.get('control_dir', ''),
     line
 )
 
@@ -452,18 +453,18 @@ if widget_settings.get('empowerment', False):
         # Parse empowerment text for special tags
         lines = empowerment_text.strip().split('\n')
         current_prefix = None
-        
+
         for line in lines:
             line = line.strip()
             if not line or line.startswith('#'):
                 continue
-                
+
             # Check for short tags ($ckpt, $vae, etc.)
             for prefix, (_, short_tag) in PREFIX_MAP.items():
                 if line.startswith(short_tag):
                     current_prefix = prefix
                     continue
-                    
+
             # Check for long tags
             if line.lower() in ['model', 'ckpt']:
                 current_prefix = 'model'
@@ -507,7 +508,7 @@ if widget_settings.get('empowerment', False):
             elif line.lower() in ['config', 'cfg']:
                 current_prefix = 'config'
                 continue
-                
+
             # If it's a URL and we have a prefix, add it
             if line.startswith('http') and current_prefix:
                 custom_downloads.append(f"{current_prefix}:{line}")
