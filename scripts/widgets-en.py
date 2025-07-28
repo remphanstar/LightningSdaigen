@@ -1,4 +1,4 @@
-# ~ widgets.py | by ANXETY - FIXED VERSION ~
+# ~ widgets.py | by ANXETY - Enhanced with Multiple WebUI Support ~
 
 from widget_factory import WidgetFactory        # WIDGETS
 from webui_utils import update_current_webui    # WEBUI
@@ -44,7 +44,7 @@ widgets_js = JS / 'main-widgets.js'
 # ========================= UTILITIES =========================
 
 class WidgetManager:
-    """FIXED: Encapsulate widget management to avoid global pollution"""
+    """Enhanced widget management with WebUI awareness"""
     
     def __init__(self):
         self.factory = WidgetFactory()
@@ -96,7 +96,7 @@ class WidgetManager:
         # If no preferred defaults exist, return the first non-'none' option, or 'none' if that's all we have
         return next((opt for opt in options if opt != 'none'), options[0] if options else 'none')
 
-    # FIXED: Input validation functions
+    # ENHANCED: Input validation functions
     def validate_token(self, token, token_type=""):
         """Validate API token format"""
         if not token:
@@ -123,6 +123,205 @@ class WidgetManager:
             return True
         return url.startswith(('http://', 'https://'))
 
+# ========================= ENHANCED WEBUI SELECTION =========================
+
+# ENHANCED: Complete WebUI selection with all implementations
+WEBUI_SELECTION = {
+    # Standard Stable Diffusion WebUIs
+    'A1111': "--xformers --no-half-vae",
+    'ComfyUI': "--dont-print-server",
+    'Classic': "--persistent-patches --cuda-stream --pin-shared-memory",
+    'Lightning.ai': "--xformers --no-half-vae",
+    
+    # ENHANCED: Forge Variants
+    'Forge': "--xformers --cuda-stream --pin-shared-memory",
+    'ReForge': "--xformers --cuda-stream --pin-shared-memory",
+    'SD-UX': "--xformers --no-half-vae --theme dark",
+    
+    # ENHANCED: Face Manipulation WebUIs
+    'FaceFusion': "--execution-provider cuda --face-analyser buffalo_l --face-swapper inswapper_128",
+    'RoopUnleashed': "--execution-provider cuda --frame-processor face_swapper --ui-layout horizontal",
+    
+    # ENHANCED: Specialized WebUIs
+    'DreamO': "--device cuda --precision fp16 --max-batch-size 4"
+}
+
+# ENHANCED: WebUI Categories for better organization
+WEBUI_CATEGORIES = {
+    'Standard SD': ['A1111', 'Classic', 'Lightning.ai'],
+    'Enhanced SD': ['Forge', 'ReForge', 'SD-UX'],
+    'Node-Based': ['ComfyUI'],
+    'Face Swap': ['FaceFusion', 'RoopUnleashed'],
+    'Specialized': ['DreamO']
+}
+
+# ========================= ENHANCED WEBUI HANDLING =========================
+
+def enhanced_update_change_webui(change, widget_manager):
+    """Enhanced WebUI change handling with feature detection."""
+    try:
+        webui = change['new']
+        wm = widget_manager
+        
+        # Update command line arguments
+        wm.widgets['commandline_arguments'].value = WEBUI_SELECTION.get(webui, '')
+        
+        # ENHANCED: Get WebUI features
+        from webui_utils import get_webui_features, is_webui_supported, get_webui_category
+        features = get_webui_features(webui)
+        category = get_webui_category(webui)
+        
+        # Handle extension/custom nodes visibility
+        supports_extensions = is_webui_supported(webui, 'extensions')
+        is_comfy = webui == 'ComfyUI'
+        is_face_swap = category == 'face_swap'
+        
+        # Update extension-related widgets
+        if 'latest_extensions' in wm.widgets:
+            wm.widgets['latest_extensions'].layout.display = 'none' if not supports_extensions else ''
+            wm.widgets['latest_extensions'].value = supports_extensions
+            
+        if 'check_custom_nodes_deps' in wm.widgets:
+            wm.widgets['check_custom_nodes_deps'].layout.display = '' if is_comfy else 'none'
+            
+        if 'theme_accent' in wm.widgets:
+            wm.widgets['theme_accent'].layout.display = 'none' if is_face_swap else ''
+            
+        # Update Extensions URL description
+        if 'Extensions_url' in wm.widgets:
+            if is_comfy:
+                wm.widgets['Extensions_url'].description = 'Custom Nodes:'
+            elif supports_extensions:
+                wm.widgets['Extensions_url'].description = 'Extensions:'
+            else:
+                wm.widgets['Extensions_url'].description = 'Add-ons:'
+        
+        # ENHANCED: Handle model selection visibility based on WebUI capabilities
+        supports_models = is_webui_supported(webui, 'models')
+        supports_lora = is_webui_supported(webui, 'lora')
+        supports_vae = is_webui_supported(webui, 'vae')
+        supports_controlnet = is_webui_supported(webui, 'controlnet')
+        
+        # Show/hide model widgets based on support
+        model_widgets = ['model', 'model_num', 'XL_models', 'inpainting_model']
+        for widget_name in model_widgets:
+            if widget_name in wm.widgets:
+                wm.widgets[widget_name].layout.display = '' if supports_models else 'none'
+        
+        # Show/hide VAE widgets
+        vae_widgets = ['vae', 'vae_num']
+        for widget_name in vae_widgets:
+            if widget_name in wm.widgets:
+                wm.widgets[widget_name].layout.display = '' if supports_vae else 'none'
+        
+        # Show/hide LoRA widgets
+        lora_widgets = ['lora']
+        for widget_name in lora_widgets:
+            if widget_name in wm.widgets:
+                wm.widgets[widget_name].layout.display = '' if supports_lora else 'none'
+        
+        # Show/hide ControlNet widgets
+        controlnet_widgets = ['controlnet', 'controlnet_num']
+        for widget_name in controlnet_widgets:
+            if widget_name in wm.widgets:
+                wm.widgets[widget_name].layout.display = '' if supports_controlnet else 'none'
+        
+        # ENHANCED: Display WebUI-specific information
+        display_webui_info(webui, category, features)
+        
+    except Exception as e:
+        print(f"Error in enhanced_update_change_webui: {e}")
+
+def display_webui_info(webui, category, features):
+    """Display information about the selected WebUI."""
+    info_messages = {
+        'face_swap': f"🎭 {webui}: Face swapping and manipulation. Traditional SD features disabled.",
+        'node_based': f"🖼️ {webui}: Node-based interface. Uses custom nodes instead of extensions.",
+        'enhanced_sd': f"⚒️ {webui}: Enhanced Stable Diffusion with performance optimizations.",
+        'specialized': f"🎨 {webui}: Specialized AI tool with unique capabilities.",
+        'standard_sd': f"🖼️ {webui}: Standard Stable Diffusion interface."
+    }
+    
+    if category in info_messages:
+        print(f"\n{info_messages[category]}")
+        
+    # Display supported features
+    supported_features = []
+    for feature in ['models', 'lora', 'vae', 'controlnet', 'extensions']:
+        if features.get(f'supports_{feature}', False):
+            supported_features.append(feature.upper())
+    
+    if supported_features:
+        print(f"✅ Supported: {', '.join(supported_features)}")
+
+def update_XL_options(change, widget):
+    """ENHANCED: Better XL options handling with WebUI awareness"""
+    try:
+        from webui_utils import is_webui_supported
+        current_webui = widget.widgets.get('change_webui')
+        
+        # Only apply XL logic for WebUIs that support models
+        if current_webui and not is_webui_supported(current_webui.value, 'models'):
+            return
+            
+        is_xl = change['new']
+        
+        if 'model' in widget.widgets:
+            model_widget = widget.widgets['model']
+            vae_widget = widget.widgets.get('vae')
+            lora_widget = widget.widgets.get('lora')
+            controlnet_widget = widget.widgets.get('controlnet')
+            
+            if is_xl:
+                # SDXL defaults
+                xl_model_defaults = ['none']
+                xl_vae_defaults = ['sdxl_vae | SDXL VAE', 'sdxl_vae', 'none']
+                xl_lora_defaults = ['none']
+                xl_controlnet_defaults = ['none']
+                
+                model_widget.value = (widget.get_safe_default(model_widget.options, xl_model_defaults),)
+                if vae_widget:
+                    vae_widget.value = widget.get_safe_default(vae_widget.options, xl_vae_defaults)
+                if lora_widget:
+                    lora_widget.value = (widget.get_safe_default(lora_widget.options, xl_lora_defaults),)
+                if controlnet_widget:
+                    controlnet_widget.value = (widget.get_safe_default(controlnet_widget.options, xl_controlnet_defaults),)
+            else:
+                # Regular SD 1.5 defaults
+                regular_model_defaults = ['none']
+                regular_vae_defaults = ['vae-ft-mse-840000-ema-pruned | 840000 | 840k SD1.5 VAE - vae-ft-mse-840k', 'ClearVAE(SD1.5) - v2.3', 'none']
+                regular_lora_defaults = ['none']
+                regular_controlnet_defaults = ['none']
+                
+                model_widget.value = (widget.get_safe_default(model_widget.options, regular_model_defaults),)
+                if vae_widget:
+                    vae_widget.value = widget.get_safe_default(vae_widget.options, regular_vae_defaults)
+                if lora_widget:
+                    lora_widget.value = (widget.get_safe_default(lora_widget.options, regular_lora_defaults),)
+                if controlnet_widget:
+                    controlnet_widget.value = (widget.get_safe_default(controlnet_widget.options, regular_controlnet_defaults),)
+                    
+    except Exception as e:
+        print(f"Error in update_XL_options: {e}")
+
+def update_empowerment(change, widget):
+    """Enhanced empowerment toggle handling"""
+    try:
+        selected_emp = change['new']
+
+        customDL_widgets = [
+            'Model_url', 'Vae_url', 'LoRA_url', 'Embedding_url', 'Extensions_url', 'ADetailer_url',
+            'custom_file_urls', 'empowerment_output'
+        ]
+
+        display_value = '' if selected_emp else 'none'
+        for widget_name in customDL_widgets:
+            if widget_name in widget.widgets:
+                widget.widgets[widget_name].layout.display = display_value
+
+    except Exception as e:
+        print(f"Error in update_empowerment: {e}")
+
 # ========================= WIDGETS ========================
 
 # Initialize the WidgetManager
@@ -130,57 +329,30 @@ wm = WidgetManager()
 factory = wm.factory
 HR = widgets.HTML('<hr>')
 
-WEBUI_SELECTION = {
-    'A1111':   "--xformers --no-half-vae --share --lowram",
-    'ComfyUI': "--dont-print-server",
-    'Forge':   "--xformers --cuda-stream --pin-shared-memory",
-    'Classic': "--persistent-patches --cuda-stream --pin-shared-memory",
-    'ReForge': "--xformers --cuda-stream --pin-shared-memory",
-    'SD-UX':   "--xformers --no-half-vae"
-}
-
 # --- MODEL ---
-"""Create model selection widgets."""
+"""Create model selection widgets with WebUI awareness."""
 model_header = factory.create_header('Model Selection')
 model_options = wm.read_model_data(f"{SCRIPTS}/_models-data.py", 'model')
+model_widget = factory.create_select_multiple(model_options, 'Model:', ('none',))
+model_num_widget = factory.create_text('Model Number:', '', 'Enter model numbers for batch download.')
 
-# FIXED: Use safe default selection for models
-model_preferred_defaults = [
-    'D5K6.0',  # First model in your custom list
-    'Merged amateurs - Mixed Amateurs',  # Second option
-]
-model_default = wm.get_safe_default(model_options, model_preferred_defaults)
-model_widget = factory.create_select_multiple(model_options, 'Model:', (model_default,))
+# XL and Inpainting options (will be hidden for non-SD WebUIs)
+xl_models_widget = factory.create_checkbox('SDXL Models', False)
+inpainting_model_widget = factory.create_checkbox('Inpainting Models', False)
 
-model_num_widget = factory.create_text('Model Number:', '', 'Enter model numbers for download.')
-inpainting_model_widget = factory.create_checkbox('Inpainting Models', False, class_names=['inpaint'], layout={'width': '250px'})
-XL_models_widget = factory.create_checkbox('SDXL', False, class_names=['sdxl'])
-
-switch_model_widget = factory.create_hbox([inpainting_model_widget, XL_models_widget])
-
-# Store widgets in manager
 wm.widgets.update({
     'model': model_widget,
     'model_num': model_num_widget,
-    'inpainting_model': inpainting_model_widget,
-    'XL_models': XL_models_widget
+    'XL_models': xl_models_widget,
+    'inpainting_model': inpainting_model_widget
 })
 
 # --- VAE ---
 """Create VAE selection widgets."""
 vae_header = factory.create_header('VAE Selection')
 vae_options = wm.read_model_data(f"{SCRIPTS}/_models-data.py", 'vae')
-
-# FIXED: Use safe default selection for VAE
-vae_preferred_defaults = [
-    'vae-ft-mse-840000-ema-pruned | 840000 | 840k SD1.5 VAE - vae-ft-mse-840k',  # First VAE in your list
-    'ClearVAE(SD1.5) - v2.3',  # Second option
-    'none'
-]
-vae_default = wm.get_safe_default(vae_options, vae_preferred_defaults)
-vae_widget = factory.create_dropdown(vae_options, 'Vae:', vae_default)
-
-vae_num_widget = factory.create_text('Vae Number:', '', 'Enter vae numbers for download.')
+vae_widget = factory.create_dropdown(vae_options, 'VAE:', 'none')
+vae_num_widget = factory.create_text('VAE Number:', '', 'Enter VAE numbers for download.')
 
 wm.widgets.update({
     'vae': vae_widget,
@@ -197,13 +369,14 @@ wm.widgets.update({
     'lora': lora_widget
 })
 
-
 # --- ADDITIONAL ---
-"""Create additional configuration widgets."""
+"""Create additional configuration widgets with enhanced WebUI support."""
 additional_header = factory.create_header('Additional')
 latest_webui_widget = factory.create_checkbox('Update WebUI', True)
 latest_extensions_widget = factory.create_checkbox('Update Extensions', True)
 check_custom_nodes_deps_widget = factory.create_checkbox('Check Custom-Nodes Dependencies', True)
+
+# ENHANCED: WebUI selector with all options
 change_webui_widget = factory.create_dropdown(list(WEBUI_SELECTION.keys()), 'WebUI:', 'A1111', layout={'width': 'auto'})
 detailed_download_widget = factory.create_dropdown(['off', 'on'], 'Detailed Download:', 'off', layout={'width': 'auto'})
 
@@ -223,7 +396,7 @@ controlnet_widget = factory.create_select_multiple(controlnet_options, 'ControlN
 controlnet_num_widget = factory.create_text('ControlNet Number:', '', 'Enter ControlNet model numbers for download.')
 commit_hash_widget = factory.create_text('Commit Hash:', '', 'Switch between branches or commits.')
 
-# FIXED: Add validation for tokens
+# Token widgets with validation
 civitai_token_from_env = os.getenv('CIVITAI_API_TOKEN')
 civitai_token_widget = factory.create_text('CivitAI Token:', '', 'Enter your CivitAi API token.')
 if civitai_token_from_env:
@@ -303,27 +476,21 @@ custom_download_header_popup = factory.create_html('''
 
 empowerment_widget = factory.create_checkbox('Empowerment Mode', False, class_names=['empowerment'])
 empowerment_output_widget = factory.create_textarea(
-'', '', """Use special tags. Portable analogue of "File (txt)"
-Tags: model (ckpt), vae, lora, embed (emb), extension (ext), adetailer (ad), control (cnet), upscale (ups), clip, unet, vision (vis), encoder (enc), diffusion (diff), config (cfg)
-Short-tags: start with '$' without space -> $ckpt
------- Example ------
+'', '', """Use special tags.
+$model - model (example: "{model}")
+$vae - vae (example: "{vae}")
+$lora - lora (example: "{lora}")
+etc...""", layout={'width': '100%', 'height': '120px'})
 
-# Lora
-https://civitai.com/api/download/models/229782
+# Custom download widgets
+Model_url_widget = factory.create_textarea('Model:', '', 'model.safetensors')
+Vae_url_widget = factory.create_textarea('VAE:', '', 'vae.pt')
+LoRA_url_widget = factory.create_textarea('LoRA:', '', 'lora.safetensors')
+Embedding_url_widget = factory.create_textarea('Embedding:', '', 'embedding.pt')
+Extensions_url_widget = factory.create_textarea('Extensions:', '', 'https://github.com')
+ADetailer_url_widget = factory.create_textarea('ADetailer:', '', 'adetailer.pt')
+custom_file_urls_widget = factory.create_textarea('Custom File:', '', 'filename.extension')
 
-$ext
-https://github.com/hako-mikan/sd-webui-cd-tuner[CD-Tuner]
-""")
-
-Model_url_widget = factory.create_text('Model:')
-Vae_url_widget = factory.create_text('Vae:')
-LoRA_url_widget = factory.create_text('LoRa:')
-Embedding_url_widget = factory.create_text('Embedding:')
-Extensions_url_widget = factory.create_text('Extensions:')
-ADetailer_url_widget = factory.create_text('ADetailer:')
-custom_file_urls_widget = factory.create_text('File (txt):')
-
-# Store custom download widgets
 wm.widgets.update({
     'empowerment': empowerment_widget,
     'empowerment_output': empowerment_output_widget,
@@ -336,390 +503,70 @@ wm.widgets.update({
     'custom_file_urls': custom_file_urls_widget
 })
 
-# --- Save Button ---
-"""Create button widgets."""
-save_button = factory.create_button('Save', class_names=['button', 'button_save'])
-
-# =================== GDrive Toggle Button =================
-"""Create Google Drive toggle button - FIXED: Only for Colab."""
-BTN_STYLE = {'width': '48px', 'height': '48px'}
-TOOLTIPS = ("Disconnect Google Drive", "Connect Google Drive")
-
-GD_status = js.read(SETTINGS_PATH, 'mountGDrive', False)
-GDrive_button = factory.create_button('', layout=BTN_STYLE, class_names=['sideContainer-btn', 'gdrive-btn'])
-GDrive_button.tooltip = TOOLTIPS[not GD_status]
-GDrive_button.toggle = GD_status
-
-# FIXED: Properly handle non-Colab environments
-if not IN_COLAB:
-    GDrive_button.layout.display = 'none'
-else:
-    if GD_status:
-        GDrive_button.add_class('active')
-
-    def handle_toggle(btn):
-        """Toggle Google Drive button state"""
-        btn.toggle = not btn.toggle
-        btn.tooltip = TOOLTIPS[not btn.toggle]
-        btn.toggle and btn.add_class('active') or btn.remove_class('active')
-
-    GDrive_button.on_click(handle_toggle)
-
-# ========= Export/Import Widget Settings Buttons ==========
-"""Create buttons to export/import widget settings - FIXED: Only for Colab."""
-export_button = factory.create_button('', layout=BTN_STYLE, class_names=['sideContainer-btn', 'export-btn'])
-export_button.tooltip = "Export settings to JSON"
-
-import_button = factory.create_button('', layout=BTN_STYLE, class_names=['sideContainer-btn', 'import-btn'])
-import_button.tooltip = "Import settings from JSON"
-
-if not IN_COLAB:
-    export_button.layout.display = 'none'
-    import_button.layout.display = 'none'
-
-# EXPORT
-def export_settings(button=None, filter_empty=False):
-    """FIXED: Better error handling for export"""
-    if not IN_COLAB:
-        show_notification("Export only available in Google Colab", "warning")
-        return
-        
-    try:
-        widgets_data = {}
-        for key in wm.settings_keys:
-            if key in wm.widgets:
-                value = wm.widgets[key].value
-                if not filter_empty or (value not in [None, '', False]):
-                    widgets_data[key] = value
-
-        settings_data = {
-            'widgets': widgets_data,
-            'mountGDrive': GDrive_button.toggle
-        }
-
-        display(Javascript(f'downloadJson({json.dumps(settings_data)});'))
-        show_notification("Settings exported successfully!", "success")
-    except Exception as e:
-        show_notification(f"Export failed: {str(e)}", "error")
-
-# IMPORT
-def import_settings(button=None):
-    """FIXED: Better error handling for import"""
-    if not IN_COLAB:
-        show_notification("Import only available in Google Colab", "warning")
-        return
-    display(Javascript('openFilePicker();'))
-
-# APPLY SETTINGS
-def apply_imported_settings(data):
-    """FIXED: Better validation and error handling"""
-    try:
-        success_count = 0
-        total_count = 0
-        failed_items = []
-
-        if 'widgets' in data:
-            for key, value in data['widgets'].items():
-                total_count += 1
-                if key in wm.settings_keys and key in wm.widgets:
-                    try:
-                        # FIXED: Validate input before setting
-                        if key.endswith('_token') and not wm.validate_token(value, key.replace('_token', '')):
-                            failed_items.append(f"{key}: invalid format")
-                            continue
-                        if key.endswith('_url') and not wm.validate_url(value):
-                            failed_items.append(f"{key}: invalid URL")
-                            continue
-                            
-                        wm.widgets[key].value = value
-                        success_count += 1
-                    except Exception as e:
-                        failed_items.append(f"{key}: {str(e)}")
-
-        if 'mountGDrive' in data and IN_COLAB:
-            GDrive_button.toggle = data['mountGDrive']
-            if GDrive_button.toggle:
-                GDrive_button.add_class('active')
-            else:
-                GDrive_button.remove_class('active')
-
-        if failed_items:
-            show_notification(f"Import completed with warnings: {', '.join(failed_items[:3])}", "warning")
-        elif success_count == total_count:
-            show_notification("Settings imported successfully!", "success")
-        else:
-            show_notification(f"Imported {success_count}/{total_count} settings", "warning")
-
-    except Exception as e:
-        show_notification(f"Import failed: {str(e)}", "error")
-
-# ============= NOTIFICATION for Export/Import =============
-"""Create widget-popup displaying status of Export/Import settings."""
-notification_popup = factory.create_html('', class_names=['notification-popup', 'hidden'])
-
-def show_notification(message, message_type='info'):
-    """FIXED: Better notification handling"""
-    icon_map = {
-        'success':  '✅',
-        'error':    '❌',
-        'info':     'ℹ️',
-        'warning':  '⚠️'
-    }
-    icon = icon_map.get(message_type, 'ℹ️')
-
-    notification_popup.value = f'''
-    <div class="notification {message_type}">
-        <span class="notification-icon">{icon}</span>
-        <span class="notification-text">{message}</span>
-    </div>
-    '''
-
-    notification_popup.remove_class('visible')
-    notification_popup.remove_class('hidden')
-    notification_popup.add_class('visible')
-
-    # Auto-hide PopUp After 2.5s - only if JS is available
-    if IN_COLAB:
-        display(Javascript("hideNotification(delay = 2500);"))
-
-# REGISTER CALLBACK
-"""Register callbacks only if in Colab"""
-if IN_COLAB:
-    output.register_callback('importSettingsFromJS', apply_imported_settings)
-    output.register_callback('showNotificationFromJS', show_notification)
-
-export_button.on_click(export_settings)
-import_button.on_click(import_settings)
-
-# =================== DISPLAY / SETTINGS ===================
-
-factory.load_css(widgets_css)   # load CSS (widgets)
-if IN_COLAB:
-    factory.load_js(widgets_js)     # load JS (widgets) - only in Colab
-
-# Display sections
-model_widgets = [model_header, model_widget, model_num_widget, switch_model_widget]
-vae_widgets = [vae_header, vae_widget, vae_num_widget]
-lora_widgets = [lora_header, lora_widget]
-additional_widgets = additional_widget_list
-custom_download_widgets = [
-    custom_download_header_popup,
-    empowerment_widget,
-    empowerment_output_widget,
-    Model_url_widget,
-    Vae_url_widget,
-    LoRA_url_widget,
-    Embedding_url_widget,
-    Extensions_url_widget,
-    ADetailer_url_widget,
+custom_download_widget_list = [
+    custom_download_header_popup, HR,
+    empowerment_widget, empowerment_output_widget, HR,
+    Model_url_widget, Vae_url_widget, LoRA_url_widget,
+    Embedding_url_widget, Extensions_url_widget, ADetailer_url_widget,
     custom_file_urls_widget
 ]
 
-# Create Boxes
-model_box = factory.create_vbox(model_widgets, class_names=['container'])
-vae_box = factory.create_vbox(vae_widgets, class_names=['container'])
-lora_box = factory.create_vbox(lora_widgets, class_names=['container'])
-additional_box = factory.create_vbox(additional_widgets, class_names=['container'])
-custom_download_box = factory.create_vbox(custom_download_widgets, class_names=['container', 'container_cdl'])
+# ENHANCED: Connect WebUI change callback
+factory.connect_widgets([(change_webui_widget, 'value')], 
+                       lambda change, widget: enhanced_update_change_webui(change, wm))
 
-# Create Containers
-CONTAINERS_WIDTH = '1080px'
-model_vae_lora_box = factory.create_hbox(
-    [model_box, vae_box, lora_box],
-    class_names=['widgetContainer', 'model-vae'],
-)
+# Connect other callbacks
+factory.connect_widgets([(xl_models_widget, 'value')], lambda change, widget: update_XL_options(change, wm))
+factory.connect_widgets([(empowerment_widget, 'value')], lambda change, widget: update_empowerment(change, wm))
 
-widgetContainer = factory.create_vbox(
-    [model_vae_lora_box, additional_box, custom_download_box, save_button],
-    class_names=['widgetContainer'],
-    layout={'min_width': CONTAINERS_WIDTH, 'max_width': CONTAINERS_WIDTH}
-)
-sideContainer = factory.create_vbox(
-    [GDrive_button, export_button, import_button, notification_popup],
-    class_names=['sideContainer']
-)
-
-# CRITICAL FIX: CSS flexbox properties must use hyphenated values, not underscore notation
-# The ipywidgets Layout trait system enforces strict CSS specification compliance
-# 'flex_start' is invalid - must be 'flex-start' per CSS flexbox specification
-mainContainer = factory.create_hbox(
-    [widgetContainer, sideContainer],
-    class_names=['mainContainer'],
-    layout={'align_items': 'flex-start'}  # FIXED: hyphenated CSS property value
-)
-
-factory.display(mainContainer)
-
-# ==================== CALLBACK FUNCTION ===================
-
-# Initialize visibility
-check_custom_nodes_deps_widget.layout.display = 'none'
-empowerment_output_widget.add_class('empowerment-output')
-empowerment_output_widget.add_class('hidden')
-
-# FIXED: Improved callback functions with error handling
-def update_XL_options(change, widget):
-    """FIXED: Better error handling and state management"""
-    try:
-        is_xl = change['new']
-        
-        data_file = '_xl-models-data.py' if is_xl else '_models-data.py'
-        
-        # Update options with error handling
-        try:
-            model_widget.options = wm.read_model_data(f"{SCRIPTS}/{data_file}", 'model')
-            vae_widget.options = wm.read_model_data(f"{SCRIPTS}/{data_file}", 'vae')
-            lora_widget.options = wm.read_model_data(f"{SCRIPTS}/{data_file}", 'lora')
-            controlnet_widget.options = wm.read_model_data(f"{SCRIPTS}/{data_file}", 'cnet')
-        except Exception as e:
-            print(f"Warning: Could not update model options: {e}")
-            return
-
-        # FIXED: Use safe defaults for XL vs regular models
-        if is_xl:
-            # XL model defaults - use first available XL model
-            xl_model_defaults = list(model_widget.options)[1:4]  # Skip 'none', get first few
-            xl_vae_defaults = ['none', 'ALL']
-            xl_lora_defaults = ['none']
-            xl_controlnet_defaults = ['none']
-            
-            model_widget.value = (wm.get_safe_default(model_widget.options, xl_model_defaults),)
-            vae_widget.value = wm.get_safe_default(vae_widget.options, xl_vae_defaults)
-            lora_widget.value = (wm.get_safe_default(lora_widget.options, xl_lora_defaults),)
-            controlnet_widget.value = (wm.get_safe_default(controlnet_widget.options, xl_controlnet_defaults),)
-            
-            # Handle inpainting checkbox for XL
-            inpainting_model_widget.add_class('_disable')
-            inpainting_model_widget.value = False
-        else:
-            # Regular model defaults - use your custom models
-            regular_model_defaults = [
-                'D5K6.0',
-                'Merged amateurs - Mixed Amateurs'
-            ]
-            regular_vae_defaults = [
-                'vae-ft-mse-840000-ema-pruned | 840000 | 840k SD1.5 VAE - vae-ft-mse-840k',
-                'ClearVAE(SD1.5) - v2.3',
-                'none'
-            ]
-            regular_lora_defaults = ['none']
-            regular_controlnet_defaults = ['none']
-            
-            model_widget.value = (wm.get_safe_default(model_widget.options, regular_model_defaults),)
-            vae_widget.value = wm.get_safe_default(vae_widget.options, regular_vae_defaults)
-            lora_widget.value = (wm.get_safe_default(lora_widget.options, regular_lora_defaults),)
-            controlnet_widget.value = (wm.get_safe_default(controlnet_widget.options, regular_controlnet_defaults),)
-            
-            # Enable inpainting checkbox for regular models
-            inpainting_model_widget.remove_class('_disable')
-            
-    except Exception as e:
-        print(f"Error in update_XL_options: {e}")
-
-def update_change_webui(change, widget):
-    """FIXED: Better WebUI change handling"""
-    try:
-        webui = change['new']
-        commandline_arguments_widget.value = WEBUI_SELECTION.get(webui, '')
-
-        is_comfy = webui == 'ComfyUI'
-
-        latest_extensions_widget.layout.display = 'none' if is_comfy else ''
-        latest_extensions_widget.value = not is_comfy
-        check_custom_nodes_deps_widget.layout.display = '' if is_comfy else 'none'
-        theme_accent_widget.layout.display = 'none' if is_comfy else ''
-        Extensions_url_widget.description = 'Custom Nodes:' if is_comfy else 'Extensions:'
-    except Exception as e:
-        print(f"Error in update_change_webui: {e}")
-
-def update_empowerment(change, widget):
-    """FIXED: Better empowerment toggle handling"""
-    try:
-        selected_emp = change['new']
-
-        customDL_widgets = [
-            Model_url_widget, Vae_url_widget, LoRA_url_widget,
-            Embedding_url_widget, Extensions_url_widget, ADetailer_url_widget
-        ]
-        
-        for widget in customDL_widgets:
-            widget.add_class('empowerment-text-field')
-
-        if selected_emp:
-            for wg in customDL_widgets:
-                wg.add_class('hidden')
-            empowerment_output_widget.remove_class('hidden')
-        else:
-            for wg in customDL_widgets:
-                wg.remove_class('hidden')
-            empowerment_output_widget.add_class('hidden')
-
-    except Exception as e:
-        print(f"Error in update_empowerment: {e}")
-
-def filter_inpainting_models(change, widget):
-    """Filter model list based on inpainting toggle"""
-    is_inpainting = change['new']
-    current_options = list(model_widget.options)
-    
-    if is_inpainting:
-        filtered_options = [opt for opt in current_options if 'inpainting' in opt.lower() or opt == 'none']
-    else:
-        # Re-read the full list to restore non-inpainting models
-        data_file = '_xl-models-data.py' if XL_models_widget.value else '_models-data.py'
-        filtered_options = wm.read_model_data(f"{SCRIPTS}/{data_file}", 'model')
-
-    model_widget.options = filtered_options
-    if model_widget.value not in filtered_options:
-        model_widget.value = (wm.get_safe_default(filtered_options, ['none']),)
-
-
-# Connecting widgets
-factory.connect_widgets([(change_webui_widget, 'value')], update_change_webui)
-factory.connect_widgets([(XL_models_widget, 'value')], update_XL_options)
-factory.connect_widgets([(empowerment_widget, 'value')], update_empowerment)
-factory.connect_widgets([(inpainting_model_widget, 'value')], filter_inpainting_models)
-
-
-# ================ Load / Save - Settings V4 ===============
-
+# Save settings function
 def save_settings():
-    """Save widget values to settings."""
-    widgets_values = {key: wm.widgets[key].value for key in wm.settings_keys if key in wm.widgets}
-    js.save(SETTINGS_PATH, 'WIDGETS', widgets_values)
-    if IN_COLAB:
-        js.save(SETTINGS_PATH, 'mountGDrive', True if GDrive_button.toggle else False)  # Save Status GDrive-btn
+    """Save all widget settings to JSON."""
+    settings = {key: wm.widgets[key].value for key in wm.settings_keys if key in wm.widgets}
+    js.save(SETTINGS_PATH, 'WIDGETS', settings)
+    update_current_webui(settings['change_webui'])
 
-    update_current_webui(change_webui_widget.value)  # Update Selected WebUI in settings.json
+# ========================= LAYOUT & DISPLAY =========================
 
-def load_settings():
-    """Load widget values from settings."""
-    if js.key_exists(SETTINGS_PATH, 'WIDGETS'):
-        widget_data = js.read(SETTINGS_PATH, 'WIDGETS')
-        for key in wm.settings_keys:
-            if key in widget_data and key in wm.widgets:
-                try:
-                    wm.widgets[key].value = widget_data.get(key, '')
-                except Exception as e:
-                    print(f"Warning: could not load setting for {key}: {e}")
+# Load and apply CSS/JS
+try:
+    with open(widgets_css, 'r', encoding='utf-8') as f:
+        css_content = f.read()
+    with open(widgets_js, 'r', encoding='utf-8') as f:
+        js_content = f.read()
+    
+    display(widgets.HTML(f"<style>{css_content}</style>"))
+    display(widgets.HTML(f"<script>{js_content}</script>"))
+except FileNotFoundError as e:
+    print(f"CSS/JS file not found: {e}")
 
-    # Load Status GDrive-btn
-    if IN_COLAB:
-        GD_status = js.read(SETTINGS_PATH, 'mountGDrive', False)
-        GDrive_button.toggle = (GD_status == True)
-        if GDrive_button.toggle:
-            GDrive_button.add_class('active')
-        else:
-            GDrive_button.remove_class('active')
+# Create main widget containers
+model_widgets_container = factory.create_vbox([
+    model_header, 
+    model_widget, model_num_widget, 
+    xl_models_widget, inpainting_model_widget
+])
 
-def save_data(button):
-    """Handle save button click."""
-    save_settings()
-    all_widgets = [
-        model_box, vae_box, lora_box, additional_box, custom_download_box, save_button,   # mainContainer
-        GDrive_button, export_button, import_button, notification_popup         # sideContainer
-    ]
-    factory.close(all_widgets, class_names=['hide'], delay=0.8)
+vae_widgets_container = factory.create_vbox([
+    vae_header,
+    vae_widget, vae_num_widget
+])
 
-load_settings()
-save_button.on_click(save_data)
+lora_widgets_container = factory.create_vbox([
+    lora_header,
+    lora_widget
+])
+
+additional_widgets_container = factory.create_vbox(additional_widget_list)
+custom_download_widgets_container = factory.create_vbox(custom_download_widget_list)
+
+# Display all widgets
+display(model_widgets_container, vae_widgets_container, lora_widgets_container, 
+        additional_widgets_container, custom_download_widgets_container)
+
+# Save settings button
+save_button = factory.create_button('Save Settings', save_settings, class_names=['save_button'])
+display(save_button)
+
+print("🎛️ Enhanced WebUI widget system loaded!")
+print("🔧 Select your desired WebUI from the dropdown to see adapted options")
