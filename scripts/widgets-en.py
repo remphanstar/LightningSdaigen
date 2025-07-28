@@ -224,7 +224,12 @@ controlnet_num_widget = factory.create_text('ControlNet Number:', '', 'Enter Con
 commit_hash_widget = factory.create_text('Commit Hash:', '', 'Switch between branches or commits.')
 
 # FIXED: Add validation for tokens
+civitai_token_from_env = os.getenv('CIVITAI_API_TOKEN')
 civitai_token_widget = factory.create_text('CivitAI Token:', '', 'Enter your CivitAi API token.')
+if civitai_token_from_env:
+    civitai_token_widget.value = "Set in setup.py"
+    civitai_token_widget.disabled = True
+
 civitai_button = wm.create_expandable_button('Get CivitAI Token', 'https://civitai.com/user/account')
 civitai_box = factory.create_hbox([civitai_token_widget, civitai_button])
 
