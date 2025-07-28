@@ -18,7 +18,7 @@ import os
 # Add your Civitai API token here to permanently store it in the notebook.
 # This will override the token set in the widgets.
 # Get your token here: https://civitai.com/user/account
-CIVITAI_API_TOKEN = "65b66176dcf284b266579de57fbdc024"
+CIVITAI_API_TOKEN = "ff14ef326fa02885e8202e4d44fc9a13"
 
 nest_asyncio.apply()  # Async support for Jupyter
 
