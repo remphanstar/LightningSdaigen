@@ -14,6 +14,11 @@ import json
 import sys
 import os
 
+# --- Civitai API Token ---
+# Add your Civitai API token here to permanently store it in the notebook.
+# This will override the token set in the widgets.
+# Get your token here: https://civitai.com/user/account
+CIVITAI_API_TOKEN = "65b66176dcf284b266579de57fbdc024"
 
 nest_asyncio.apply()  # Async support for Jupyter
 
@@ -222,7 +227,8 @@ def create_environment_data(env, lang, fork_user, fork_repo, branch):
             "venv_path": os.environ['venv_path'],
             "settings_path": os.environ['settings_path'],
             "start_timer": start_timer,
-            "public_ip": ""
+            "public_ip": "",
+            "civitai_api_token": CIVITAI_API_TOKEN
         }
     }
 
@@ -329,6 +335,8 @@ async def main_async(args=None):
         setup_module_folder()
         env_data = create_environment_data(env, args.lang, user, repo, args.branch)
         save_env_to_json(env_data, SETTINGS_PATH)
+        if CIVITAI_API_TOKEN:
+            os.environ['CIVITAI_API_TOKEN'] = CIVITAI_API_TOKEN
         try:
             from _season import display_info
             display_info(
