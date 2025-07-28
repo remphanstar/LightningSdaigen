@@ -1,52 +1,25 @@
-# ~ launch.py | by ANXETY - FIXED VERSION ~
+# ~ launch.py | by ANXETY - FINAL CORRECTED VERSION ~
 
 import os
-from pathlib import Path
-
-# --- MATPLOTLIB FIXES (BEFORE OTHER IMPORTS) ---
-# FIXED: Set matplotlib environment before any potential matplotlib imports
-os.environ['MPLBACKEND'] = 'Agg'  # Use non-interactive backend
-os.environ['MPLCONFIGDIR'] = '/tmp/matplotlib'  # Use temp directory for config
-os.environ['FONTCONFIG_PATH'] = '/etc/fonts'  # Set font config path
-os.environ['DISPLAY'] = ':0'  # Set display for headless environments
-os.environ['PYTHONWARNINGS'] = 'ignore::UserWarning:matplotlib'  # Suppress matplotlib warnings
-os.environ['OMP_NUM_THREADS'] = '1'  # Prevent threading issues
-os.environ['MKL_NUM_THREADS'] = '1'  # Prevent Intel MKL threading issues
-
-# FIXED: Import matplotlib early and configure it properly
-try:
-    import matplotlib
-    matplotlib.use('Agg', force=True)  # Force non-interactive backend
-
-    # Clear matplotlib font cache to prevent font-related errors
-    font_cache_dirs = [
-        '/tmp/matplotlib',
-        '/root/.cache/matplotlib', 
-        '/content/.cache/matplotlib'
-    ]
-    for cache_dir in font_cache_dirs:
-        cache_path = Path(cache_dir)
-        if cache_path.exists():
-            import shutil
-            try:
-                shutil.rmtree(cache_path)
-                cache_path.mkdir(parents=True, exist_ok=True)
-            except:
-                pass
-
-    # Import pyplot and turn off interactive mode
-    import matplotlib.pyplot as plt
-    plt.ioff()  # Turn off interactive mode
-
-except ImportError:
-    pass  # matplotlib not available, skip
-
-import json_utils as js
-from IPython import get_ipython
-import subprocess
 import sys
+from pathlib import Path
+import shlex
+from IPython import get_ipython
 
-# --- ENVIRONMENT SETUP ---
+# --- MATPLOTLIB FIXES ---
+os.environ['MPLBACKEND'] = 'Agg'
+os.environ['MPLCONFIGDIR'] = '/tmp/matplotlib'
+os.environ['PYTHONWARNINGS'] = 'ignore::UserWarning:matplotlib'
+
+# --- SETUP PATHS AND MODULES ---
+sys.path.insert(0, str(Path(os.environ.get('scr_path', '')) / 'modules'))
+try:
+    import json_utils as js
+except ImportError:
+    print("FATAL: Could not import json_utils. Please ensure the setup script ran correctly.")
+    sys.exit(1)
+
+# --- ENVIRONMENT & SETTINGS ---
 osENV = os.environ
 CD = os.chdir
 ipySys = get_ipython().system
@@ -54,7 +27,6 @@ ipySys = get_ipython().system
 PATHS = {k: Path(v) for k, v in osENV.items() if k.endswith('_path')}
 HOME, VENV, SETTINGS_PATH = PATHS['home_path'], PATHS['venv_path'], PATHS['settings_path']
 
-# Load settings from JSON
 settings = js.read(SETTINGS_PATH)
 UI = settings.get('WEBUI', {}).get('current', 'A1111')
 WEBUI = settings.get('WEBUI', {}).get('webui_path', str(HOME / UI))
@@ -66,122 +38,71 @@ class COLORS:
     B, X = "\033[34m", "\033[0m"
 COL = COLORS
 
-# --- ENVIRONMENT ACTIVATION ---
-def setup_environment():
-    """Properly set up the virtual environment."""
-    print("🔧 Preparing environment for launch...")
+def get_launch_command_str():
+    """Construct the final launch command as a shell-executable string."""
+    python_exe = str(VENV / 'bin' / 'python')
+    launch_script = 'launch.py'
     
-    # Check if venv exists
-    if not VENV.exists():
-        print(f"❌ Virtual environment not found at {VENV}")
-        return False
-    
-    python_exe = VENV / 'bin' / 'python'
-    if not python_exe.exists():
-        print(f"❌ Python executable not found at {python_exe}")
-        return False
-    
-    print(f"🐍 Activating virtual environment at {VENV}")
-    
-    # Set up environment variables for the venv
-    bin_path = str(VENV / 'bin')
-    lib_path = str(VENV / 'lib' / 'python3.11' / 'site-packages')
-    
-    # Update environment
-    osENV['VIRTUAL_ENV'] = str(VENV)
-    osENV['PATH'] = f"{bin_path}:{osENV.get('PATH', '')}"
-    osENV['PYTHONPATH'] = f"{lib_path}:{osENV.get('PYTHONPATH', '')}"
-    
-    # Test the environment
-    try:
-        result = subprocess.run([str(python_exe), '-c', 'import torch; print(f"✅ PyTorch {torch.__version__} available")'], 
-                              capture_output=True, text=True, timeout=10)
-        if result.returncode == 0:
-            print(result.stdout.strip())
-        else:
-            print(f"⚠️ PyTorch test failed: {result.stderr}")
-            
-        # Test other key packages
-        test_packages = ['numpy', 'transformers', 'diffusers', 'gradio']
-        for pkg in test_packages:
-            result = subprocess.run([str(python_exe), '-c', f'import {pkg}; print("✅ {pkg} OK")'], 
-                                  capture_output=True, text=True, timeout=5)
-            if result.returncode == 0:
-                print(result.stdout.strip())
-            else:
-                print(f"⚠️ {pkg} test failed")
-                
-        print("✅ Virtual environment activated successfully")
-        return True
-        
-    except subprocess.TimeoutExpired:
-        print("❌ Environment test timed out")
-        return False
-    except Exception as e:
-        print(f"❌ Environment test failed: {e}")
-        return False
+    args_dict = {}
 
-def get_launch_command():
-    """Construct the final launch command."""
-    python_exe = VENV / 'bin' / 'python'
+    # 1. Set default/essential arguments
+    args_dict['--enable-insecure-extension-access'] = None
+    args_dict['--disable-console-progressbars'] = None
+    args_dict['--theme'] = 'dark'
     
-    # Remove duplicate arguments for a clean command
-    base_args = commandline_arguments.split() if commandline_arguments else []
-    unique_args = []
-    seen = set()
-    for arg in base_args:
-        if arg not in seen:
-            unique_args.append(arg)
-            seen.add(arg)
-    
-    final_args = " ".join(unique_args)
-    
-    common_args = ' --enable-insecure-extension-access --disable-console-progressbars --theme dark'
+    # 2. Parse user-provided arguments, allowing overrides
+    user_args = shlex.split(commandline_arguments)
+    i = 0
+    while i < len(user_args):
+        arg = user_args[i]
+        if arg.startswith('--'):
+            if i + 1 < len(user_args) and not user_args[i+1].startswith('--'):
+                args_dict[arg] = user_args[i+1]
+                i += 2
+            else:
+                args_dict[arg] = None
+                i += 1
+        else:
+            i += 1
+            
+    # 3. Add environment-specific arguments
     if ENV_NAME == 'Kaggle':
-        common_args += ' --encrypt-pass=emoy4cnkm6imbysp84zmfiz1opahooblh7j34sgh'
-    if theme_accent != 'anxety':
-        common_args += f" --anxety {theme_accent}"
+        args_dict['--encrypt-pass'] = 'emoy4cnkm6imbysp84zmfiz1opahooblh7j34sgh'
         
-    return f"{python_exe} launch.py {final_args}{common_args}"
+    if theme_accent != 'anxety':
+        args_dict['--anxety'] = theme_accent
+        
+    # 4. Construct the final command string
+    command_parts = [python_exe, launch_script]
+    for arg, value in args_dict.items():
+        command_parts.append(arg)
+        if value is not None:
+            command_parts.append(shlex.quote(value)) # Use shlex.quote for safety
+            
+    return ' '.join(command_parts)
 
 # --- MAIN EXECUTION ---
 if __name__ == '__main__':
     print("✅ Environment is ready. Preparing to launch...")
     
-    # Set up environment first
-    if not setup_environment():
-        print("❌ Failed to set up environment. Aborting launch.")
-        sys.exit(1)
-    
-    # Check if WebUI exists
     webui_path = Path(WEBUI)
-    if not webui_path.exists():
-        print(f"❌ WebUI not found at {WEBUI}")
+    if not webui_path.exists() or not (webui_path / 'launch.py').exists():
+        print(f"❌ WebUI launch script not found at {webui_path / 'launch.py'}")
         sys.exit(1)
-    
-    launch_py = webui_path / 'launch.py'
-    if not launch_py.exists():
-        print(f"❌ launch.py not found at {launch_py}")
-        sys.exit(1)
-    
-    LAUNCHER = get_launch_command()
+        
+    LAUNCHER_COMMAND = get_launch_command_str()
     
     print(f"🔧 WebUI: {COL.B}{UI}{COL.X}")
-    print(f"🚀 Launching with command: {LAUNCHER}")
+    print(f"🚀 Launching with command: {LAUNCHER_COMMAND}")
 
     try:
+        # Change to the WebUI directory
         CD(WEBUI)
-        # Use subprocess instead of ipySys for better control
-        process = subprocess.Popen(LAUNCHER, shell=True, stdout=subprocess.PIPE, 
-                                 stderr=subprocess.STDOUT, text=True, bufsize=1)
         
-        # Print output in real-time
-        for line in process.stdout:
-            print(line.rstrip())
+        # Use the IPython system call, which is equivalent to '!' and provides direct output
+        ipySys(LAUNCHER_COMMAND)
             
     except KeyboardInterrupt:
         print("\nProcess interrupted by user.")
-        if 'process' in locals():
-            process.terminate()
     except Exception as e:
         print(f"\nAn error occurred during launch: {e}")
