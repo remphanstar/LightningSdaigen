@@ -28,4 +28,7 @@ segment-anything==1.0.0
 pycocotools==2.0.8
 pytorch-lightning==2.4.0
 basicsr==1.4.2
-onnxruntime-gpu==1.18.0
+onnxruntime-gpu==1.17.1
+insightface==0.7.3
+protobuf==4.25.3
+timm==0.9.5
