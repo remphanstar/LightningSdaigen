@@ -102,7 +102,7 @@ def setup_environment():
             print(f"⚠️ PyTorch test failed: {result.stderr}")
             
         # Test other key packages
-        test_packages = ['numpy', 'transformers', 'diffusers', 'gradio', 'xformers']
+        test_packages = ['numpy', 'transformers', 'diffusers', 'gradio']
         for pkg in test_packages:
             result = subprocess.run([str(python_exe), '-c', f'import {pkg}; print("✅ {pkg} OK")'], 
                                   capture_output=True, text=True, timeout=5)
