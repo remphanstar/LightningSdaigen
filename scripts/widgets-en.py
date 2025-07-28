@@ -131,7 +131,7 @@ factory = wm.factory
 HR = widgets.HTML('<hr>')
 
 WEBUI_SELECTION = {
-    'A1111':   "--xformers --no-half-vae",
+    'A1111':   "--xformers --no-half-vae --share --log-startup --loglevel DEBUG",
     'ComfyUI': "--dont-print-server",
     'Forge':   "--xformers --cuda-stream --pin-shared-memory",
     'Classic': "--persistent-patches --cuda-stream --pin-shared-memory",
