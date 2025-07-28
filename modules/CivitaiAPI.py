@@ -61,7 +61,8 @@ class CivitAiAPI:
 
     def __init__(self, token: Optional[str] = None, log: bool = True):
         # FIXED: No hardcoded fake token, proper validation
-        self.token = self._validate_token(token)
+        env_token = os.getenv('CIVITAI_API_TOKEN')
+        self.token = self._validate_token(env_token or token)
         self.logger = APILogger(verbose=log)
         
         if not self.token:
