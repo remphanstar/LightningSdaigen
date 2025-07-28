@@ -107,14 +107,9 @@ def handle_path_and_filename(parts, url, is_git=False):
 @handle_errors
 def strip_url(url):
     """Normalize special URLs (civitai, huggingface, github)."""
+    # **FIX: Do NOT modify civitai URLs here. Pass them directly to the downloader.**
     if 'civitai.com/models/' in url:
-        if CAI_TOKEN:
-            api = CivitAiAPI(CAI_TOKEN)
-            data = api.validate_download(url)
-            return data.download_url if data else None
-        else:
-            log_message("CivitAI token required for CivitAI downloads", True, 'warning')
-            return None
+        return url
 
     if 'huggingface.co' in url:
         url = url.replace('/blob/', '/resolve/').split('?')[0]
@@ -252,11 +247,9 @@ def _aria2_download(url, filename, log):
         '--stderr=true',
         '-c', '-x16', '-s16', '-k1M', '-j5'
     ]
-
-    # **FIX: Correctly add Authorization header for Civitai**
-    if 'civitai.com' in url and CAI_TOKEN:
-        cmd.append(f'--header=Authorization: Bearer {CAI_TOKEN}')
-    elif 'huggingface.co' in url and HF_TOKEN:
+    
+    # **FIX: Let CivitaiAPI handle the token in the URL itself.**
+    if 'huggingface.co' in url and HF_TOKEN:
         cmd.append(f'--header=Authorization: Bearer {HF_TOKEN}')
 
     if not filename:
