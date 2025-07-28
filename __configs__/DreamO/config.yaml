@@ -1,0 +1,41 @@
+# DreamO Configuration
+
+# Device settings
+device: cuda
+precision: fp16
+max_batch_size: 4
+
+# Model settings
+model_path: models/diffusion
+vae_path: models/vae
+lora_path: models/lora
+
+# Generation settings
+default_steps: 50
+default_cfg_scale: 7.5
+default_width: 512
+default_height: 512
+
+# Performance settings
+attention_optimization: true
+memory_efficient: true
+enable_xformers: true
+
+# Output settings
+output_format: png
+output_quality: 95
+save_metadata: true
+
+# Advanced settings
+clip_skip: 1
+eta: 0.0
+enable_attention_slicing: true
+enable_vae_slicing: true
+
+# Scheduler settings
+scheduler: DPMSolverMultistepScheduler
+use_karras_sigmas: false
+
+# Safety settings
+safety_checker: true
+requires_safety_checker: false
