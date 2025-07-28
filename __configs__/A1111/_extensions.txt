@@ -1,7 +1,7 @@
 ## ANXETY Edits
 https://github.com/anxety-solo/webui_timer timer
 https://github.com/anxety-solo/anxety-theme
-https://github.com/anxety-solo/sd-civitai-browser-plus Civitai-Browser-Plus
+## https://github.com/anxety-solo/sd-civitai-browser-plus Civitai-Browser-Plus
 https://github.com/anxety-solo/Umi-AI-Wildcards
 
 ## Gutris1
