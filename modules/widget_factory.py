@@ -1,250 +1,146 @@
-""" WidgetFactory Module | by ANXETY """
+# ~ widget_factory.py | Enhanced Widget Factory for 10WebUI System | by ANXETY ~
 
-from IPython.display import display, HTML
 import ipywidgets as widgets
-import time
+from IPython.display import display, HTML, Javascript
+import json_utils as js
+from pathlib import Path
+import os
+import re
+from typing import List, Dict, Any, Optional, Union, Callable
 
+# Safe imports with fallbacks
+try:
+    from webui_utils import (get_webui_features, is_webui_supported, get_webui_category,
+                           get_available_webuis, get_webuis_by_category)
+    WEBUI_UTILS_AVAILABLE = True
+except ImportError:
+    WEBUI_UTILS_AVAILABLE = False
+    # Fallback functions
+    def get_webui_features(ui): return {'supports_models': True, 'supports_extensions': True}
+    def is_webui_supported(ui, feature): return True
+    def get_webui_category(ui): return 'standard_sd'
+    def get_available_webuis(): return ['A1111', 'ComfyUI', 'Classic', 'Lightning.ai']
+    def get_webuis_by_category(): return {'standard_sd': ['A1111', 'ComfyUI', 'Classic', 'Lightning.ai']}
+
+# Environment paths
+osENV = os.environ
+PATHS = {k: Path(v) for k, v in osENV.items() if k.endswith('_path')}
+
+try:
+    HOME = PATHS['home_path']
+    SCR_PATH = PATHS['scr_path']
+    SETTINGS_PATH = PATHS['settings_path']
+except KeyError:
+    # Fallback paths
+    HOME = Path.cwd()
+    SCR_PATH = HOME / 'ANXETY'
+    SETTINGS_PATH = SCR_PATH / 'settings.json'
 
 class WidgetFactory:
-    # INIT
+    """Enhanced widget factory with WebUI-aware capabilities and modern styling."""
+    
     def __init__(self):
-        self.default_style = {'description_width': 'initial'}
-        self.default_layout = widgets.Layout()
-
-    def _validate_class_names(self, class_names):
-        """Validate and normalize class names."""
-        if class_names is None:
-            return []
-
-        if isinstance(class_names, str):
-            return [class_names.strip()]
-
-        if isinstance(class_names, list):
-            return [cls.strip() for cls in class_names if cls.strip()]
-
-        self._log(f"Invalid class_names type: {type(class_names).__name__}", 'WARNING')
-        return []
-
-    def add_classes(self, widget, class_names):
-        """Add CSS classes to a widget."""
-        classes = self._validate_class_names(class_names)
-        for cls in classes:
-            widget.add_class(cls)
-
-    # HTML
-    def load_css(self, css_path):
-        """Load CSS from a file and display it in the notebook."""
+        """Initialize the widget factory with enhanced capabilities."""
+        
+        self.current_webui = self._get_current_webui()
+        self.widget_cache = {}
+        self.event_handlers = {}
+        self.custom_styles = self._load_custom_styles()
+        
+        # Enhanced widget styling
+        self.default_layout = widgets.Layout(width='auto', margin='2px')
+        self.full_width_layout = widgets.Layout(width='100%', margin='2px')
+        self.compact_layout = widgets.Layout(width='150px', margin='2px')
+        
+        # Widget themes
+        self.themes = {
+            'default': {
+                'primary_color': '#007bff',
+                'success_color': '#28a745',
+                'warning_color': '#ffc107',
+                'danger_color': '#dc3545',
+                'dark_color': '#343a40'
+            },
+            'dark': {
+                'primary_color': '#0d6efd',
+                'success_color': '#198754',
+                'warning_color': '#fd7e14',
+                'danger_color': '#dc3545',
+                'dark_color': '#212529'
+            }
+        }
+        
+        self.current_theme = 'default'
+        
+        print("✅ Enhanced Widget Factory initialized")
+    
+    def _get_current_webui(self) -> str:
+        """Get current WebUI selection."""
         try:
-            with open(css_path, 'r') as file:
-                data = file.read()
-                display(HTML(f"<style>{data}</style>"))
-        except Exception as e:
-            print(f"Error loading CSS: {e}")
-
-    def load_js(self, js_path):
-        """Load JavaScript from a file and display it in the notebook."""
+            return js.read(SETTINGS_PATH, 'WEBUI.current') or 'A1111'
+        except:
+            return 'A1111'
+    
+    def _load_custom_styles(self) -> str:
+        """Load custom CSS styles from file."""
         try:
-            with open(js_path, 'r') as file:
-                data = file.read()
-                display(HTML(f"<script>{data}</script>"))
+            css_path = SCR_PATH / 'CSS' / 'main-widgets.css'
+            if css_path.exists():
+                with open(css_path, 'r') as f:
+                    return f.read()
         except Exception as e:
-            print(f"Error loading JavaScript: {e}")
-
-    def create_html(self, content, class_names=None):
-        """Create an HTML widget with optional CSS classes."""
-        html_widget = widgets.HTML(content)
-        if class_names:
-            self.add_classes(html_widget, class_names)
-        return html_widget
-
-    def create_header(self, name, class_names=None):
-        """Create a header HTML widget."""
-        class_names_str = ' '.join(class_names) if class_names else 'header'
-        header = f'<div class="{class_names_str}">{name}</div>'
-        return self.create_html(header)
-
-    # Widgets
-    ## Supporting functions
-    def _apply_layouts(self, children, layouts):
-        """Apply layouts to children widgets."""
-        n_layouts = len(layouts)
-
-        if n_layouts == 1:
-            # Apply the single layout to all children
-            for child in children:
-                child.layout = layouts[0]
+            print(f"⚠️ Could not load custom styles: {e}")
+        
+        # Fallback default styles
+        return """
+        .widget-container { margin: 5px 0; }
+        .category-header { 
+            font-weight: bold; 
+            color: #4CAF50; 
+            margin: 15px 0 5px 0; 
+            font-size: 16px;
+        }
+        .webui-info { 
+            background: #f8f9fa; 
+            padding: 10px; 
+            border-radius: 6px; 
+            margin: 8px 0;
+            border-left: 4px solid #007bff;
+        }
+        .feature-disabled {
+            opacity: 0.6;
+            background: #f5f5f5;
+        }
+        .warning-box {
+            background: #fff3cd;
+            color: #856404;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ffeaa7;
+        }
+        """
+    
+    def apply_custom_styles(self):
+        """Apply custom CSS styles to the notebook."""
+        display(HTML(f'<style>{self.custom_styles}</style>'))
+    
+    def create_header(self, text: str, level: int = 3, 
+                     style: str = None, icon: str = None) -> widgets.HTML:
+        """Create enhanced header widget with icons and styling."""
+        
+        icon_html = f'<span style="margin-right: 8px;">{icon}</span>' if icon else ''
+        
+        if style:
+            style_attr = f'style="{style}"'
         else:
-            for child, layout in zip(children, layouts):
-                child.layout = layout
-
-    def _create_widget(self, widget_type, class_names=None, **kwargs):
-        """Create a widget of a specified type with optional classes and styles."""
-        style = kwargs.get('style', self.default_style)
-
-        # Set default layout if not provided
-        if widget_type in [widgets.Text, widgets.Dropdown, widgets.Textarea]:
-            if 'layout' not in kwargs and kwargs.get('reset') != True:    # reset -> return default width
-                kwargs['layout'] = widgets.Layout(width='100%')
-
-        widget = widget_type(style=style, **kwargs)
-
-        if class_names:
-            self.add_classes(widget, class_names)
-
-        return widget
-
-    ## Creation functions
-    def create_text(self, description, value='', placeholder='', class_names=None, **kwargs):
-        """Create a text input widget."""
-        return self._create_widget(
-            widgets.Text,
-            description=description,
-            value=value,
-            placeholder=placeholder,
-            class_names=class_names,
-            **kwargs
+            style_attr = 'class="category-header"'
+        
+        html_content = f'<h{level} {style_attr}>{icon_html}{text}</h{level}>'
+        
+        return widgets.HTML(
+            value=html_content,
+            layout=self.full_width_layout
         )
-
-    def create_textarea(self, description, value='', placeholder='', class_names=None, **kwargs):
-        """Create a textarea input widget."""
-        return self._create_widget(
-            widgets.Textarea,
-            description=description,
-            value=value,
-            placeholder=placeholder,
-            class_names=class_names,
-            **kwargs
-        )
-
-    def create_dropdown(self, options, description, value=None, placeholder='', class_names=None, **kwargs):
-        """Create a dropdown widget."""
-        if value is None and options:
-            value = options[0]
-
-        return self._create_widget(
-            widgets.Dropdown,
-            options=options,
-            description=description,
-            value=value,
-            placeholder=placeholder,
-            class_names=class_names,
-            **kwargs
-        )
-
-    def create_select_multiple(self, options, description, value=None, class_names=None, **kwargs):
-        """Create a multiple select widget."""
-        if isinstance(value, str):
-            value = (value,)
-        elif value is None:
-            value = ()
-
-        return self._create_widget(
-            widgets.SelectMultiple,
-            options=options,
-            description=description,
-            value=value,
-            class_names=class_names,
-            **kwargs
-        )
-
-    def create_checkbox(self, description, value=False, class_names=None, **kwargs):
-        """Create a checkbox widget."""
-        return self._create_widget(
-            widgets.Checkbox,
-            description=description,
-            value=value,
-            class_names=class_names,
-            **kwargs
-        )
-
-    def create_button(self, description, class_names=None, **kwargs):
-        """Create a button widget."""
-        return self._create_widget(
-            widgets.Button,
-            description=description,
-            class_names=class_names,
-            **kwargs
-        )
-
-    def _create_box(self, box_type, children, class_names=None, **kwargs):
-        """Create a box layout (horizontal or vertical) for widgets."""
-        if 'layouts' in kwargs:
-            self._apply_layouts(children, kwargs.pop('layouts'))
-
-        return self._create_widget(
-            box_type,
-            children=children,
-            class_names=class_names,
-            **kwargs
-        )
-
-    def create_hbox(self, children, class_names=None, **kwargs):
-        """Create a horizontal box layout for widgets."""
-        return self._create_box(widgets.HBox, children, class_names, **kwargs)
-
-    def create_vbox(self, children, class_names=None, **kwargs):
-        """Create a vertical box layout for widgets."""
-        return self._create_box(widgets.VBox, children, class_names, **kwargs)
-
-    def create_box(self, children, direction='column', wrap=True, class_names=None, **kwargs):
-        """
-        Create a flexible Box container with adjustable direction and wrapping.
-        -  direction (str): Layout direction - 'row' (default) or 'column'.
-        -  wrap (bool): Enable flex wrapping for children (only for Box container).
-        """
-        if direction not in ('row', 'column'):
-            raise ValueError(f"Invalid direction: {direction}. Use 'row' or 'column'.")
-
-        layout = kwargs.pop('layout', {})
-        layout.update({
-            'flex_flow': direction,
-            'flex_wrap': 'wrap' if wrap else 'nowrap'
-        })
-
-        return self._create_box(
-            widgets.Box,
-            children,
-            class_names=class_names,
-            layout=layout,
-            **kwargs
-        )
-
-    # Other
-    def display(self, widgets):
-        """Display one or multiple widgets."""
-        if isinstance(widgets, list):
-            for widget in widgets:
-                display(widget)
-        else:
-            display(widgets)
-
-    def close(self, widgets, class_names=None, delay=0.2):
-        """Close one or multiple widgets after a delay."""
-        if not isinstance(widgets, list):
-            widgets = [widgets]
-
-        if class_names:
-            for widget in widgets:
-                self.add_classes(widget, class_names)
-
-        time.sleep(delay)  # closing delay for all widgets
-
-        # Close all widgets
-        for widget in widgets:
-            widget.close()
-
-    # CallBack
-    def connect_widgets(self, widget_pairs, callbacks):
-        """
-        Connect multiple widgets to callback functions for specified property changes.
-
-        Parameters:
-        - widget_pairs: List of tuples where each tuple contains a widget and the property name to observe.
-        - callbacks: List of callback functions or a single callback function to be called on property change.
-        """
-        if not isinstance(callbacks, list):
-            callbacks = [callbacks]
-
-        for widget, property_name in widget_pairs:
-            for callback in callbacks:
-                widget.observe(lambda change, widget=widget, callback=callback: callback(change, widget), names=property_name)
+    
+    def create_info_box(self, content: str, box_type: str = 'info', 
+                       dismissible: bool = False) -> widgets.HTML
