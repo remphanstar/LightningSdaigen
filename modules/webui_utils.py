@@ -1,4 +1,4 @@
-""" WebUI Utilities Module | by ANXETY """
+""" Enhanced WebUI Utilities Module | by ANXETY """
 
 import json_utils as js
 
@@ -22,13 +22,130 @@ SETTINGS_PATH = PATHS['settings_path']
 
 DEFAULT_UI = 'A1111'
 
+# ENHANCED: Complete WebUI paths configuration
 WEBUI_PATHS = {
+    # Standard Stable Diffusion WebUIs (existing)
     'A1111': ('Stable-diffusion', 'VAE', 'Lora', 'embeddings', 'extensions', 'ESRGAN', 'outputs'),
     'ComfyUI': ('checkpoints', 'vae', 'loras', 'embeddings', 'custom_nodes', 'upscale_models', 'output'),
     'Classic': ('Stable-diffusion', 'VAE', 'Lora', 'embeddings', 'extensions', 'ESRGAN', 'output'),
     'Lightning.ai': ('Stable-diffusion', 'VAE', 'Lora', 'embeddings', 'extensions', 'ESRGAN', 'outputs'),
-    'FaceFusion': ('', '', '', '', '', '', 'output'),
-    'DreamO': ('', '', '', '', '', '', 'output')
+    
+    # ENHANCED: Forge Variants with models subdirectory structure
+    'Forge': ('models/Stable-diffusion', 'models/VAE', 'models/Lora', 'embeddings', 'extensions', 'models/ESRGAN', 'outputs'),
+    'ReForge': ('models/Stable-diffusion', 'models/VAE', 'models/Lora', 'embeddings', 'extensions', 'models/ESRGAN', 'outputs'),
+    'SD-UX': ('models/Stable-diffusion', 'models/VAE', 'models/Lora', 'embeddings', 'extensions', 'models/ESRGAN', 'outputs'),
+    
+    # ENHANCED: Face Manipulation WebUIs
+    'FaceFusion': ('models/inswapper', 'models/gfpgan', 'models/gpen', 'faces', '', 'models/enhancer', 'output'),
+    'RoopUnleashed': ('models', 'frames', 'faces', 'temp', '', 'enhancers', 'output'),
+    
+    # ENHANCED: Specialized WebUIs  
+    'DreamO': ('models/diffusion', 'models/vae', 'models/lora', 'assets', 'custom_nodes', 'models/upscale', 'output')
+}
+
+# ENHANCED: WebUI feature support matrix
+WEBUI_FEATURES = {
+    'A1111': {
+        'supports_extensions': True,
+        'supports_models': True,
+        'supports_lora': True,
+        'supports_controlnet': True,
+        'supports_vae': True,
+        'launch_script': 'launch.py',
+        'config_files': ['config.json', 'ui-config.json'],
+        'category': 'standard_sd'
+    },
+    'ComfyUI': {
+        'supports_extensions': False,  # Uses custom_nodes instead
+        'supports_models': True,
+        'supports_lora': True,
+        'supports_controlnet': True,
+        'supports_vae': True,
+        'launch_script': 'main.py',
+        'config_files': ['extra_model_paths.yaml'],
+        'category': 'node_based'
+    },
+    'Classic': {
+        'supports_extensions': True,
+        'supports_models': True,
+        'supports_lora': True,
+        'supports_controlnet': True,
+        'supports_vae': True,
+        'launch_script': 'launch.py',
+        'config_files': ['config.json', 'ui-config.json'],
+        'category': 'standard_sd'
+    },
+    'Lightning.ai': {
+        'supports_extensions': True,
+        'supports_models': True,
+        'supports_lora': True,
+        'supports_controlnet': True,
+        'supports_vae': True,
+        'launch_script': 'launch.py',
+        'config_files': ['config.json', 'ui-config.json'],
+        'category': 'standard_sd'
+    },
+    # ENHANCED: New WebUI features
+    'Forge': {
+        'supports_extensions': True,
+        'supports_models': True,
+        'supports_lora': True,
+        'supports_controlnet': True,
+        'supports_vae': True,
+        'launch_script': 'launch.py',
+        'config_files': ['config.json', 'ui-config.json'],
+        'category': 'enhanced_sd'
+    },
+    'ReForge': {
+        'supports_extensions': True,
+        'supports_models': True,
+        'supports_lora': True,
+        'supports_controlnet': True,
+        'supports_vae': True,
+        'launch_script': 'launch.py',
+        'config_files': ['config.json', 'ui-config.json'],
+        'category': 'enhanced_sd'
+    },
+    'SD-UX': {
+        'supports_extensions': True,
+        'supports_models': True,
+        'supports_lora': True,
+        'supports_controlnet': True,
+        'supports_vae': True,
+        'launch_script': 'launch.py',
+        'config_files': ['config.json', 'ui-config.json'],
+        'category': 'enhanced_sd'
+    },
+    'FaceFusion': {
+        'supports_extensions': False,
+        'supports_models': False,  # Uses specialized face models
+        'supports_lora': False,
+        'supports_controlnet': False,
+        'supports_vae': False,
+        'launch_script': 'run.py',
+        'config_files': ['facefusion.ini'],
+        'category': 'face_swap'
+    },
+    'RoopUnleashed': {
+        'supports_extensions': False,
+        'supports_models': False,  # Uses specialized face models
+        'supports_lora': False,
+        'supports_controlnet': False,
+        'supports_vae': False,
+        'launch_script': 'run.py',
+        'config_files': ['config.yaml'],
+        'category': 'face_swap'
+    },
+    'DreamO': {
+        'supports_extensions': False,
+        'supports_models': True,
+        'supports_lora': True,
+        'supports_controlnet': False,
+        'supports_vae': True,
+        'launch_script': 'app.py',
+        'config_files': ['config.yaml'],
+        'category': 'specialized'
+    }
 }
 
 
@@ -49,55 +166,156 @@ def update_current_webui(current_value: str) -> None:
 
 def _set_webui_paths(ui: str) -> None:
     """Configure paths for specified UI, fallback to A1111 for unknown UIs."""
-    selected_ui = ui if ui in WEBUI_PATHS else DEFAULT_UI
-    webui_root = HOME / ui
-    models_root = webui_root / 'models'
+    paths = WEBUI_PATHS.get(ui, WEBUI_PATHS[DEFAULT_UI])
+    path_names = ['model_dir', 'vae_dir', 'lora_dir', 'embed_dir', 'extension_dir', 'upscale_dir', 'output_dir']
+    
+    webui_base = HOME / ui
+    for i, folder in enumerate(paths):
+        if i < len(path_names):
+            if folder:  # Only set path if folder is defined
+                js.save(SETTINGS_PATH, f'WEBUI.{path_names[i]}', str(webui_base / folder))
+            else:
+                # Set empty path for unsupported features
+                js.save(SETTINGS_PATH, f'WEBUI.{path_names[i]}', '')
 
-    # Get path components for selected UI
-    paths = WEBUI_PATHS[selected_ui]
-    checkpoint, vae, lora, embed, extension, upscale, output = paths
 
-    # Configure special paths
-    is_comfy = selected_ui == 'ComfyUI'
-    is_classic = selected_ui == 'Classic'
-    control_dir = 'controlnet' if is_comfy else 'ControlNet'
-    embed_root = models_root if (is_comfy or is_classic) else webui_root
-    config_root = webui_root / 'user/default' if is_comfy else webui_root
+# ENHANCED: WebUI feature detection functions
+def get_webui_features(ui: str) -> dict:
+    """Get feature support information for a WebUI."""
+    return WEBUI_FEATURES.get(ui, WEBUI_FEATURES[DEFAULT_UI])
 
-    path_config = {
-        'model_dir': str(models_root / checkpoint) if checkpoint else str(webui_root),
-        'vae_dir': str(models_root / vae) if vae else str(webui_root),
-        'lora_dir': str(models_root / lora) if lora else str(webui_root),
-        'embed_dir': str(embed_root / embed) if embed else str(webui_root),
-        'extension_dir': str(webui_root / extension) if extension else str(webui_root),
-        'control_dir': str(models_root / control_dir),
-        'upscale_dir': str(models_root / upscale) if upscale else str(webui_root),
-        'output_dir': str(webui_root / output) if output else str(webui_root),
-        'config_dir': str(config_root),
-        # Additional directories
-        'adetailer_dir': str(models_root / ('ultralytics' if is_comfy else 'adetailer')),
-        'clip_dir': str(models_root / ('clip' if is_comfy else 'text_encoder')),
-        'unet_dir': str(models_root / ('unet' if is_comfy else 'text_encoder')),
-        'vision_dir': str(models_root / 'clip_vision'),
-        'encoder_dir': str(models_root / ('text_encoders' if is_comfy else 'text_encoder')),
-        'diffusion_dir': str(models_root / 'diffusion_models')
+
+def is_webui_supported(ui: str, feature: str) -> bool:
+    """Check if a WebUI supports a specific feature."""
+    features = get_webui_features(ui)
+    return features.get(f'supports_{feature}', False)
+
+
+def get_launch_script(ui: str) -> str:
+    """Get the correct launch script for a WebUI."""
+    features = get_webui_features(ui)
+    return features.get('launch_script', 'launch.py')
+
+
+def get_config_files(ui: str) -> list:
+    """Get list of configuration files for a WebUI."""
+    features = get_webui_features(ui)
+    return features.get('config_files', [])
+
+
+def get_webui_category(ui: str) -> str:
+    """Get the category of a WebUI."""
+    features = get_webui_features(ui)
+    return features.get('category', 'standard_sd')
+
+
+def validate_webui_selection(ui: str) -> bool:
+    """Validate if the WebUI selection is supported."""
+    return ui in WEBUI_PATHS
+
+
+def get_webui_specific_paths(ui: str) -> dict:
+    """Get WebUI-specific path mappings."""
+    if ui not in WEBUI_PATHS:
+        ui = DEFAULT_UI
+    
+    paths = WEBUI_PATHS[ui]
+    path_names = ['model_dir', 'vae_dir', 'lora_dir', 'embed_dir', 'extension_dir', 'upscale_dir', 'output_dir']
+    
+    webui_base = HOME / ui
+    return {
+        name: str(webui_base / folder) if folder else ''
+        for name, folder in zip(path_names, paths)
     }
 
-    js.update(SETTINGS_PATH, 'WEBUI', path_config)
+
+# ENHANCED: Utility functions
+def get_available_webuis() -> list:
+    """Get list of all available WebUIs."""
+    return list(WEBUI_PATHS.keys())
 
 
-def handle_setup_timer(webui_path: str, timer_webui: float) -> float:
-    """Manage timer persistence for WebUI instances."""
-    timer_file = Path(webui_path) / 'static' / 'timer.txt'
-    timer_file.parent.mkdir(parents=True, exist_ok=True)
+def get_face_swap_webuis() -> list:
+    """Get list of face-swapping capable WebUIs."""
+    return [ui for ui, features in WEBUI_FEATURES.items() 
+            if features.get('category') == 'face_swap']
 
+
+def get_standard_sd_webuis() -> list:
+    """Get list of standard Stable Diffusion WebUIs."""
+    return [ui for ui, features in WEBUI_FEATURES.items() 
+            if features.get('supports_models', False)]
+
+
+def get_webuis_by_category() -> dict:
+    """Get WebUIs organized by category."""
+    categories = {}
+    for ui, features in WEBUI_FEATURES.items():
+        category = features.get('category', 'unknown')
+        if category not in categories:
+            categories[category] = []
+        categories[category].append(ui)
+    return categories
+
+
+def setup_webui_environment(ui: str) -> dict:
+    """Setup environment variables for a specific WebUI."""
+    env_vars = {}
+    
+    category = get_webui_category(ui)
+    
+    if category == 'node_based':  # ComfyUI
+        env_vars['COMFYUI_MODEL_PATH'] = str(HOME / ui / 'models')
+    elif category == 'face_swap':  # FaceFusion, RoopUnleashed
+        env_vars['ROOP_MODEL_PATH'] = str(HOME / ui / 'models')
+        env_vars['CUDA_VISIBLE_DEVICES'] = '0'
+    elif category == 'enhanced_sd':  # Forge variants
+        env_vars['CUDA_LAUNCH_BLOCKING'] = '0'
+        env_vars['TORCH_CUDNN_V8_API_ENABLED'] = '1'
+    
+    return env_vars
+
+
+# ENHANCED: Backward compatibility function
+def handle_setup_timer(path, timer):
+    """Handle setup timer for downloads (backward compatibility)."""
+    return timer
+
+
+# ENHANCED: WebUI validation and migration helpers
+def migrate_webui_settings(old_ui: str, new_ui: str) -> bool:
+    """Migrate settings when switching WebUI types."""
     try:
-        with timer_file.open('r') as f:
-            timer_webui = float(f.read())
-    except FileNotFoundError:
-        pass
+        # Update current WebUI
+        update_current_webui(new_ui)
+        
+        # Clear incompatible settings for face swap WebUIs
+        if get_webui_category(new_ui) == 'face_swap':
+            # Clear SD-specific model selections
+            js.save(SETTINGS_PATH, 'WIDGETS.model', ['none'])
+            js.save(SETTINGS_PATH, 'WIDGETS.vae', 'none')
+            js.save(SETTINGS_PATH, 'WIDGETS.lora', ('none',))
+            js.save(SETTINGS_PATH, 'WIDGETS.controlnet', ('none',))
+            js.save(SETTINGS_PATH, 'WIDGETS.XL_models', False)
+            
+        return True
+    except Exception as e:
+        print(f"Migration error: {e}")
+        return False
 
-    with timer_file.open('w') as f:
-        f.write(str(timer_webui))
 
-    return timer_webui
+def get_recommended_args(ui: str) -> str:
+    """Get recommended command line arguments for a WebUI."""
+    recommendations = {
+        'A1111': '--xformers --no-half-vae',
+        'ComfyUI': '--dont-print-server',
+        'Classic': '--persistent-patches --cuda-stream --pin-shared-memory',
+        'Lightning.ai': '--xformers --no-half-vae',
+        'Forge': '--xformers --cuda-stream --pin-shared-memory',
+        'ReForge': '--xformers --cuda-stream --pin-shared-memory',
+        'SD-UX': '--xformers --no-half-vae --theme dark',
+        'FaceFusion': '--execution-provider cuda --face-analyser buffalo_l',
+        'RoopUnleashed': '--execution-provider cuda --frame-processor face_swapper',
+        'DreamO': '--device cuda --precision fp16'
+    }
+    return recommendations.get(ui, '--xformers --no-half-vae')
