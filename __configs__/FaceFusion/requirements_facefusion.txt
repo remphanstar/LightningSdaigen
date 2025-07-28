@@ -1,0 +1,14 @@
+onnxruntime-gpu>=1.15.0
+opencv-python>=4.7.0
+insightface>=0.7.3
+gfpgan>=1.3.8
+realesrgan>=0.3.0
+basicsr>=1.4.2
+facexlib>=0.3.0
+filterpy>=1.4.5
+numba>=0.57.0
+numpy>=1.24.0
+pillow>=9.5.0
+psutil>=5.9.0
+tk>=0.1.0
+tqdm>=4.65.0
