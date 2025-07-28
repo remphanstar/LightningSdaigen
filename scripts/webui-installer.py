@@ -1,90 +1,232 @@
-# Enhanced webui-installer.py with complete implementations
+# ~ webui-installer.py | by ANXETY ~
+
+from Manager import m_download   # Every Download
+import json_utils as js          # JSON
+
+from IPython.display import clear_output
+from IPython.utils import capture
+from IPython import get_ipython
+from pathlib import Path
+import subprocess
+import asyncio
+import aiohttp
+import os
+
+
+osENV = os.environ
+CD = os.chdir
+ipySys = get_ipython().system
+ipyRun = get_ipython().run_line_magic
+
+# Constants (auto-convert env vars to Path)
+PATHS = {k: Path(v) for k, v in osENV.items() if k.endswith('_path')}   # k -> key; v -> value
+
+HOME = PATHS['home_path']
+VENV = PATHS['venv_path']
+SCR_PATH = PATHS['scr_path']
+SETTINGS_PATH = PATHS['settings_path']
+
+UI = js.read(SETTINGS_PATH, 'WEBUI.current')
+WEBUI = HOME / UI
+EXTS = Path(js.read(SETTINGS_PATH, 'WEBUI.extension_dir'))
+ENV_NAME = js.read(SETTINGS_PATH, 'ENVIRONMENT.env_name')
+FORK_REPO = js.read(SETTINGS_PATH, 'ENVIRONMENT.fork')
+BRANCH = js.read(SETTINGS_PATH, 'ENVIRONMENT.branch')
+
+REPO_URL = f"https://huggingface.co/NagisaNao/ANXETY/resolve/main/{UI}.zip"
+CONFIG_URL = f"https://raw.githubusercontent.com/{FORK_REPO}/{BRANCH}/__configs__"
+
+CD(HOME)
+
+
+# ==================== WEBUI OPERATIONS ====================
+
+async def _download_file(url, directory=WEBUI, filename=None):
+    """Download single file."""
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    file_path = directory / (filename or Path(url).name)
+
+    if file_path.exists():
+        file_path.unlink()
+
+    process = await asyncio.create_subprocess_shell(
+        f"curl -sLo {file_path} {url}",
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+    )
+    await process.communicate()
+
+async def get_extensions_list():
+    """Fetch list of extensions from config file."""
+    ext_file_url = f"{CONFIG_URL}/{UI}/_extensions.txt"
+    extensions = []
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(ext_file_url) as response:
+                if response.status == 200:
+                    extensions = [
+                        line.strip() for line in (await response.text()).splitlines()
+                        if line.strip() and not line.startswith('#')  # Skip empty lines and comments
+                    ]
+    except Exception as e:
+        print(f"Error fetching extensions list: {e}")
+
+    # Add environment-specific extensions
+    if ENV_NAME == 'Kaggle' and UI != 'ComfyUI':
+        extensions.append('https://github.com/anxety-solo/sd-encrypt-image Encrypt-Image')
+
+    return extensions
+
+
+# ================= CONFIGURATION HANDLING =================
+
+# For Forge/ReForge/SD-UX - default is used: A1111
+CONFIG_MAP = {
+    'A1111': [
+        f"{CONFIG_URL}/{UI}/config.json",
+        f"{CONFIG_URL}/{UI}/ui-config.json",
+        f"{CONFIG_URL}/styles.csv",
+        f"{CONFIG_URL}/user.css",
+        f"{CONFIG_URL}/card-no-preview.png, {WEBUI}/html",
+        f"{CONFIG_URL}/notification.mp3",
+        # Special Scripts
+        f"{CONFIG_URL}/gradio-tunneling.py, {VENV}/lib/python3.10/site-packages/gradio_tunneling, main.py",
+        f"{CONFIG_URL}/tagcomplete-tags-parser.py"
+    ],
+    'ComfyUI': [
+        f"{CONFIG_URL}/{UI}/install-deps.py",
+        f"{CONFIG_URL}/{UI}/comfy.settings.json, {WEBUI}/user/default",
+        f"{CONFIG_URL}/{UI}/Comfy-Manager/config.ini, {WEBUI}/user/default/ComfyUI-Manager",
+        f"{CONFIG_URL}/{UI}/workflows/anxety-workflow.json, {WEBUI}/user/default/workflows",
+        # Special Scripts
+        f"{CONFIG_URL}/gradio-tunneling.py, {VENV}/lib/python3.10/site-packages/gradio_tunneling, main.py"
+    ],
+    'Classic': [
+        f"{CONFIG_URL}/{UI}/config.json",
+        f"{CONFIG_URL}/{UI}/ui-config.json",
+        f"{CONFIG_URL}/styles.csv",
+        f"{CONFIG_URL}/user.css",
+        f"{CONFIG_URL}/notification.mp3",
+        # Special Scripts
+        f"{CONFIG_URL}/gradio-tunneling.py, {VENV}/lib/python3.11/site-packages/gradio_tunneling, main.py",
+        f"{CONFIG_URL}/tagcomplete-tags-parser.py"
+    ]
+}
+
+async def download_configuration():
+    """Download all configuration files for current UI"""
+    configs = CONFIG_MAP.get(UI, CONFIG_MAP['A1111'])
+    await asyncio.gather(*[
+        _download_file(*map(str.strip, config.split(',')))
+        for config in configs
+    ])
+
+# ================= EXTENSIONS INSTALLATION ================
+
+async def install_extensions():
+    """Install all required extensions."""
+    extensions = await get_extensions_list()
+    EXTS.mkdir(parents=True, exist_ok=True)
+    CD(EXTS)
+
+    tasks = [
+        asyncio.create_subprocess_shell(
+            f"git clone --depth 1 {ext}",
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        ) for ext in extensions
+    ]
+    await asyncio.gather(*tasks)
+
+
+# =================== WEBUI SETUP & FIXES ==================
+
+def unpack_webui():
+    """Download and extract WebUI archive."""
+    zip_path = HOME / f"{UI}.zip"
+    m_download(f"{REPO_URL} {HOME} {UI}.zip")
+    ipySys(f"unzip -q -o {zip_path} -d {WEBUI} && rm -rf {zip_path}")
+
+def setup_extension_dependencies():
+    """Install system dependencies and download models for specific extensions."""
+    print("📦 Setting up dependencies for extensions...")
+
+    # --- GroundingDINO / Segment Anything ---
+    print("  -> Checking dependencies for Segment Anything & Replacer...")
+    
+    # 1. Install build-essential for groundingdino compilation
+    try:
+        result = subprocess.run(['dpkg', '-s', 'build-essential'], capture_output=True, text=True)
+        if result.returncode != 0:
+            print("     - Installing build-essential for GroundingDINO...")
+            ipySys("apt-get update -qq && apt-get install -y build-essential")
+            print("     ✅ Done.")
+        else:
+            print("     - build-essential is already installed.")
+    except FileNotFoundError:
+        print("     ⚠️ Could not check for build-essential, attempting installation anyway.")
+        ipySys("apt-get update -qq && apt-get install -y build-essential")
+
+    # 2. Create directory and download SAM model
+    sam_dir = EXTS / 'sd-webui-segment-anything' / 'models' / 'sam'
+    sam_dir.mkdir(parents=True, exist_ok=True)
+    sam_model_path = sam_dir / 'sam_hq_vit_l.pth'
+
+    if not sam_model_path.exists():
+        print(f"     - Downloading SAM model to {sam_model_path}...")
+        sam_url = "https://huggingface.co/lkeab/hq-sam/resolve/main/sam_hq_vit_l.pth"
+        ipySys(f"wget -q --show-progress -O {sam_model_path} {sam_url}")
+        print("     ✅ SAM model downloaded.")
+    else:
+        print("     - SAM model already exists.")
+
+
+def apply_classic_fixes():
+    """Apply specific fixes for Classic UI."""
+    if UI != 'Classic':
+        return
+
+    cmd_args_path = WEBUI / 'modules/cmd_args.py'
+    if not cmd_args_path.exists():
+        return
+
+    marker = '# Arguments added by ANXETY'
+    with cmd_args_path.open('r+', encoding='utf-8') as f:
+        if marker in f.read():
+            return
+        f.write(f"\n\n{marker}\n")
+        f.write('parser.add_argument("--hypernetwork-dir", type=normalized_filepath, '
+               'default=os.path.join(models_path, \'hypernetworks\'), help="hypernetwork directory")')
+
+def run_tagcomplete_tag_parser():
+    ipyRun('run', f"{WEBUI}/tagcomplete-tags-parser.py")
+
+# ======================== MAIN CODE =======================
 
 async def main():
     if UI == 'FaceFusion':
-        print("🎭 Setting up FaceFusion (Uncensored)...")
         ipySys(f"git clone https://github.com/X-croot/facefusion-uncensored {WEBUI}")
         CD(WEBUI)
         ipySys("pip install -r requirements.txt")
-        ipySys("pip install onnxruntime-gpu torch torchvision")
-        # Download essential models
-        model_dir = WEBUI / "models"
-        model_dir.mkdir(exist_ok=True)
-        print("📦 Downloading essential FaceFusion models...")
-        
-    elif UI == 'RoopUnleashed':
-        print("🎭 Setting up RoopUnleashed...")
-        ipySys(f"git clone https://github.com/C0untFloyd/roop-unleashed {WEBUI}")
-        CD(WEBUI)
-        ipySys("pip install -r requirements.txt")
-        ipySys("pip install onnxruntime-gpu")
-        # Setup model directories
-        for folder in ['models', 'faces', 'frames']:
-            (WEBUI / folder).mkdir(exist_ok=True)
-            
     elif UI == 'DreamO':
-        print("🎨 Setting up DreamO (ByteDance)...")
         ipySys(f"git clone https://github.com/bytedance/DreamO {WEBUI}")
         CD(WEBUI)
         ipySys("pip install -r requirements.txt")
-        ipySys("pip install diffusers transformers accelerate")
-        
-    elif UI == 'Forge':
-        print("⚒️  Setting up Stable Diffusion WebUI Forge...")
-        ipySys(f"git clone https://github.com/lllyasviel/stable-diffusion-webui-forge {WEBUI}")
-        CD(WEBUI)
-        # Apply Forge-specific optimizations
-        ipySys("pip install -r requirements_versions.txt")
-        
-    elif UI == 'ReForge':
-        print("🔄 Setting up Stable Diffusion WebUI ReForge...")
-        ipySys(f"git clone https://github.com/Panchovix/stable-diffusion-webui-reForge {WEBUI}")
-        CD(WEBUI)
-        ipySys("pip install -r requirements_versions.txt")
-        
-    elif UI == 'SD-UX':
-        print("✨ Setting up SD-UX (Modern UI)...")
-        ipySys(f"git clone https://github.com/anapnoe/stable-diffusion-webui-ux {WEBUI}")
-        CD(WEBUI)
-        ipySys("pip install -r requirements.txt")
-        
-    elif UI == 'ComfyUI':
-        print("🖼️  Setting up ComfyUI...")
-        ipySys(f"git clone https://github.com/comfyanonymous/ComfyUI {WEBUI}")
-        CD(WEBUI)
-        ipySys("pip install -r requirements.txt")
-        ipySys("pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu121")
-        
     else:
-        # Original archive-based installation for A1111, Classic, Lightning.ai
         unpack_webui()
         await download_configuration()
         await install_extensions()
+        
+        # Run dependency setup after extensions are installed
+        setup_extension_dependencies()
+
         apply_classic_fixes()
 
-        if UI not in ['ComfyUI', 'FaceFusion', 'RoopUnleashed', 'DreamO']:
+        if UI != 'ComfyUI':
             run_tagcomplete_tag_parser()
 
-    # Universal post-installation steps
-    await post_install_setup()
-
-async def post_install_setup():
-    """Universal post-installation configuration."""
-    print("🔧 Applying post-installation setup...")
-    
-    # Create standard directories based on WEBUI_PATHS
-    from webui_utils import WEBUI_PATHS
-    if UI in WEBUI_PATHS:
-        paths = WEBUI_PATHS[UI]
-        for i, folder in enumerate(paths):
-            if folder:  # Skip empty folder definitions
-                folder_path = WEBUI / folder
-                folder_path.mkdir(parents=True, exist_ok=True)
-                print(f"📁 Created: {folder_path}")
-    
-    # Install extensions if configuration exists
-    ext_config = Path(f"__configs__/{UI}/_extensions.txt")
-    if ext_config.exists():
-        await install_extensions()
-    
-    print("✅ Post-installation setup complete.")
+if __name__ == '__main__':
+    with capture.capture_output():
+        asyncio.run(main())
