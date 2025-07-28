@@ -1,363 +1,110 @@
-# ~ CivitAi API Module (V2) - FIXED VERSION | by ANXETY ~
+# ~ CivitaiAPI Module (V3) - Enhanced for 10WebUI System | by ANXETY ~
 
-from urllib.parse import urlparse, parse_qs, urlencode
-from typing import Optional, Union, Tuple, Dict, Any, List
-from dataclasses import dataclass
-from pathlib import Path
-from PIL import Image
+import json_utils as js
 import requests
-import json
-import os
+import time
 import re
-import io
+from pathlib import Path
+from urllib.parse import urlparse, parse_qs
+from typing import Optional, Dict, List, Tuple, Any
+import hashlib
+import os
 
+# Environment and settings
+osENV = os.environ
+PATHS = {k: Path(v) for k, v in osENV.items() if k.endswith('_path')}
 
-# === Logger Utility ===
-class APILogger:
-    """Colored logger for API events"""
-    def __init__(self, verbose: bool = True):
-        self.verbose = verbose
+try:
+    SETTINGS_PATH = PATHS['settings_path']
+except KeyError:
+    SETTINGS_PATH = Path.cwd() / 'ANXETY' / 'settings.json'
 
-    def log(self, msg: str, level: str = "info"):
-        if not self.verbose and level != "error":
-            return
-        colors = {"error": 31, "success": 32, "warning": 33, "info": 34}
-        print(f"\033[{colors[level]}m[API {level.title()}]:\033[0m {msg}")
-
-
-# === Model Data ===
-@dataclass
-class ModelData:
-    download_url: str
-    clean_url: str
-    model_name: str
-    model_type: str
-    version_id: str
-    model_id: str
-    image_url: Optional[str] = None
-    image_name: Optional[str] = None
-    early_access: bool = False
-    base_model: Optional[str] = None
-    trained_words: Optional[List[str]] = None
-    sha256: Optional[str] = None
-
-
-# === Main API ===
 class CivitAiAPI:
-    """
-    Usage Example:
-        api = CivitAiAPI(token=token)
-        result = api.validate_download(
-            url='https://civitai.com/models/...',
-            file_name='model.safetensors'
-        )
-
-        full_data = api.get_model_data(url='https://civitai.com/models/...')
-    """
-
-    BASE_URL = 'https://civitai.com/api/v1'
-    SUPPORTED_TYPES = {'Checkpoint', 'TextualInversion', 'LORA'}    # For Save Preview
-    IS_KAGGLE = os.getenv('KAGGLE_URL_BASE')
-
-    def __init__(self, token: Optional[str] = None, log: bool = True):
-        # FIXED: No hardcoded fake token, proper validation
-        env_token = os.getenv('CIVITAI_API_TOKEN')
-        self.token = self._validate_token(env_token or token)
-        self.logger = APILogger(verbose=log)
+    """Enhanced CivitAI API client with comprehensive model support."""
+    
+    BASE_URL = "https://civitai.com/api/v1"
+    DOWNLOAD_URL = "https://civitai.com/api/download"
+    
+    def __init__(self, token: str = None, timeout: int = 30):
+        """Initialize CivitAI API client with enhanced configuration."""
         
-        if not self.token:
-            self.logger.log("No valid CivitAI token provided. API functionality will be limited.", "warning")
-
-    def _validate_token(self, token: Optional[str]) -> Optional[str]:
-        """FIXED: Validate token format and functionality"""
-        if not token:
-            return None
-            
-        # Basic format validation for CivitAI tokens (32-char hex)
-        if not (len(token) == 32 and all(c in '0123456789abcdef' for c in token.lower())):
-            return None
-            
-        # Test token with a simple API call
+        # Get token from multiple sources
+        self.token = token or self._get_token()
+        self.timeout = timeout
+        self.session = requests.Session()
+        
+        # Configure session
+        self.session.headers.update({
+            'User-Agent': 'LightningSdaigen/3.0 (Enhanced WebUI Manager)',
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        })
+        
+        if self.token:
+            self.session.headers['Authorization'] = f'Bearer {self.token}'
+            self._log("CivitAI API initialized with authentication")
+        else:
+            self._log("CivitAI API initialized without authentication (limited access)", 'warning')
+        
+        # Rate limiting
+        self.last_request_time = 0
+        self.min_request_interval = 0.5  # 500ms between requests
+        
+        # Cache for API responses
+        self.cache = {}
+        self.cache_duration = 300  # 5 minutes
+    
+    def _get_token(self) -> Optional[str]:
+        """Get CivitAI token from multiple sources."""
+        
+        # Priority: Settings file -> Environment variable -> None
         try:
-            headers = {'Authorization': f'Bearer {token}'}
-            response = requests.get(f"{self.BASE_URL}/models", headers=headers, timeout=10, params={'limit': 1})
-            if response.status_code == 401:
-                return None  # Invalid token
-            return token
+            token = js.read(SETTINGS_PATH, 'WIDGETS.civitai_token')
+            if token:
+                return token
+                
+            token = js.read(SETTINGS_PATH, 'ENVIRONMENT.civitai_api_token')
+            if token:
+                return token
         except Exception:
-            return None  # Network error or invalid token
-
-    # === Core Helpers ===
-    def _build_url(self, endpoint: str) -> str:
-        """Construct full API URL for given endpoint"""
-        return f"{self.BASE_URL}/{endpoint}"
-
-    def _get(self, url: str) -> Optional[Dict]:
-        """Perform GET request and return JSON or None"""
-        if not self.token:
-            self.logger.log("No valid token available for API request", "error")
-            return None
-            
-        headers = {'Authorization': f'Bearer {self.token}'}
-        try:
-            res = requests.get(url, headers=headers, timeout=30)
-            res.raise_for_status()
-            return res.json()
-        except requests.Timeout:
-            self.logger.log(f"Timeout for {url}", "error")
-            return None
-        except requests.HTTPError as e:
-            if e.response.status_code == 401:
-                self.logger.log("API token is invalid or expired", "error")
-            elif e.response.status_code == 429:
-                self.logger.log("API rate limit exceeded", "error")
-            else:
-                self.logger.log(f"HTTP error {e.response.status_code} for {url}", "error")
-            return None
-        except requests.RequestException as e:
-            self.logger.log(f"Request failed for {url}: {e}", "error")
-            return None
-
-    def _extract_version_id(self, url: str) -> Optional[str]:
-        """Extract version ID from various CivitAI URL formats"""
-        if not url.startswith(('http://', 'https://')):
-            self.logger.log("Invalid URL format", "error")
-            return None
-
-        if 'modelVersionId=' in url:
-            return url.split('modelVersionId=')[1].split('&')[0]
-
-        if 'civitai.com/models/' in url:
-            model_id = url.split('/models/')[1].split('/')[0].split('?')[0]
-            if model_id.isdigit():
-                model_data = self._get(self._build_url(f"models/{model_id}"))
-                return model_data.get('modelVersions', [{}])[0].get('id') if model_data else None
-
-        if '/api/download/models/' in url:
-            return url.split('/api/download/models/')[1].split('?')[0]
-
-        self.logger.log(f"Unsupported URL format: {url}", "error")
-        return None
-
-    def _process_url(self, download_url: str) -> Tuple[str, str]:
-        """Sanitize and sign download URL"""
-        parsed = urlparse(download_url)
-        query = parse_qs(parsed.query)
-        query.pop('token', None)
-        clean_url = parsed._replace(query=urlencode(query, doseq=True)).geturl()
-        final_url = f"{clean_url}?token={self.token}" if self.token else clean_url
-        return clean_url, final_url
-
-    def _get_preview(self, images: List[Dict], name: str) -> Tuple[Optional[str], Optional[str]]:
-        """Extract a valid preview image URL and filename"""
-        for img in images:
-            url = img.get('url', '')
-            if self.IS_KAGGLE and img.get('nsfwLevel', 0) >= 4:
-                continue
-            if any(url.lower().endswith(ext) for ext in ['.gif', '.mp4', '.webm']):
-                continue
-            ext = url.split('.')[-1].split('?')[0]
-            return url, f"{Path(name).stem}.preview.{ext}"
-        return None, None
-
-    def _parse_model_name(self, data: Dict, filename: Optional[str]) -> Tuple[str, str]:
-        """Generate final model filename from metadata"""
-        name = data['files'][0]['name']
-        ext = name.split('.')[-1]
-        if filename and '.' not in filename:
-            filename += f".{ext}"
-        return data['model']['type'], filename or name
-
-    def _early_access_check(self, data: Dict) -> bool:
-        """Check if model is gated behind Early Access"""
-        ea = data.get('availability') == 'EarlyAccess' or data.get('earlyAccessEndsAt')
-        if ea:
-            model_id = data.get('modelId')
-            version_id = data.get('id')
-            self.logger.log(f"Requires Early Access: https://civitai.com/models/{model_id}?modelVersionId={version_id}", "warning")
-        return ea
-
-    # === sdAIgen ===
-    def validate_download(self, url: str, file_name: Optional[str] = None) -> Optional[ModelData]:
-        """FIXED: Better error handling and token validation"""
-        if not self.token:
-            self.logger.log("CivitAI token required for downloads", "error")
-            return None
-            
-        version_id = self._extract_version_id(url)
-        if not version_id:
-            return None
-
-        data = self._get(self._build_url(f"model-versions/{version_id}"))
-        if not data:
-            return None
-
-        if self._early_access_check(data):
-            return None
-
-        try:
-            model_type, name = self._parse_model_name(data, file_name)
-            clean_url, full_url = self._process_url(data['downloadUrl'])
-
-            preview_url, preview_name = (None, None)
-            if model_type in self.SUPPORTED_TYPES:
-                preview_url, preview_name = self._get_preview(data.get('images', []), name)
-
-            return ModelData(
-                download_url=full_url, # **FIX: Return the FULL URL with the token**
-                clean_url=clean_url,
-                model_name=name,
-                model_type=model_type,
-                version_id=data['id'],
-                model_id=data['modelId'],
-                early_access=False,
-                image_url=preview_url,
-                image_name=preview_name,
-                base_model=data.get("baseModel"),
-                trained_words=data.get("trainedWords"),
-                sha256=data.get("files", [{}])[0].get("hashes", {}).get("SHA256")
-            )
-        except (KeyError, IndexError, TypeError) as e:
-            self.logger.log(f"Error parsing model data: {e}", "error")
-            return None
-
-    # === General ===
-    def get_model_data(self, url: str) -> Optional[Dict[str, Any]]:
-        """Fetch full model version metadata from CivitAI by URL"""
-        if not self.token:
-            self.logger.log("CivitAI token required for API access", "error")
-            return None
-            
-        version_id = self._extract_version_id(url)
-        if not version_id:
-            self.logger.log(f"Cannot get model data — failed to extract version ID from URL: {url}", "error")
-            return None
-
-        data = self._get(self._build_url(f"model-versions/{version_id}"))
-        if not data:
-            self.logger.log(f"Failed to retrieve model version data for ID: {version_id}", "error")
-
-        return data
-
-    def get_model_versions(self, model_id: str) -> Optional[List[Dict]]:
-        """Get all available versions of a model by ID"""
-        if not self.token:
-            return None
-            
-        data = self._get(self._build_url(f"models/{model_id}"))
-        return data.get("modelVersions") if data else None
-
-    def find_by_sha256(self, sha256: str) -> Optional[Dict]:
-        """Find model version data by SHA256 hash"""
-        if not self.token:
-            return None
-            
-        return self._get(self._build_url(f"model-versions/by-hash/{sha256}"))
-
-    def download_preview_image(self, model_data: ModelData, save_path: Optional[Union[str, Path]] = None, resize: bool = False):
-        """
-        Download and save model preview image.
-
-        Args:
-            model_data: ModelData object with preview metadata
-            save_path: Directory path (str or Path) where image will be saved. Defaults to current directory.
-            resize: If True, resize image to 512px max (default: False)
-        """
-        if model_data is None:
-            self.logger.log("ModelData is None — skipping download_preview_image", "warning")
-            return
-
-        if not model_data.image_url:
-            self.logger.log("No preview image URL available", "warning")
-            return
-
-        save_dir = Path(save_path) if save_path else Path.cwd()
-        save_dir.mkdir(parents=True, exist_ok=True)
-        file_path = save_dir / model_data.image_name
-
-        if file_path.exists():
-            return
-
-        try:
-            res = requests.get(model_data.image_url, timeout=30)
-            res.raise_for_status()
-            img_data = self._resize_image(res.content) if resize else io.BytesIO(res.content)
-            file_path.write_bytes(img_data.read())
-            self.logger.log(f"Saved preview: {file_path}", "success")
-        except Exception as e:
-            self.logger.log(f"Failed to download preview: {e}", "error")
-
-    def _resize_image(self, raw: bytes, size: int = 512) -> io.BytesIO:
-        """Resize image to target size while preserving aspect ratio"""
-        try:
-            img = Image.open(io.BytesIO(raw))
-            w, h = img.size
-            new_size = (size, int(h * size / w)) if w > h else (int(w * size / h), size)
-            img = img.resize(new_size, Image.Resampling.LANCZOS)
-            output = io.BytesIO()
-            img.save(output, format='PNG')
-            output.seek(0)
-            return output
-        except Exception as e:
-            self.logger.log(f"Resize failed: {e}", "warning")
-            return io.BytesIO(raw)
-
-    def save_model_info(self, model_data: ModelData, save_path: Optional[Union[str, Path]] = None):
-        """
-        Save model metadata to a JSON file.
-
-        Args:
-            model_data: ModelData object
-            save_path: Directory path (str or Path) to save metadata. Defaults to current directory.
-        """
-        if model_data is None:
-            self.logger.log("ModelData is None — skipping save_model_info", "warning")
-            return
-
-        save_dir = Path(save_path) if save_path else Path.cwd()
-        save_dir.mkdir(parents=True, exist_ok=True)
-        info_file = save_dir / f"{Path(model_data.model_name).stem}.json"
-
-        if info_file.exists():
-            return
-
-        base_mapping = {
-            'SD 1': 'SD1', 'SD 1.5': 'SD1', 'SD 2': 'SD2', 'SD 3': 'SD3',
-            'SDXL': 'SDXL', 'Pony': 'SDXL', 'Illustrious': 'SDXL',
+            pass
+        
+        # Fallback to environment variable
+        return os.getenv('CIVITAI_API_TOKEN')
+    
+    def _log(self, message: str, level: str = 'info'):
+        """Enhanced logging with timestamp."""
+        timestamp = time.strftime("%H:%M:%S")
+        colors = {
+            'info': '\033[34m',     # Blue
+            'warning': '\033[33m',  # Yellow
+            'error': '\033[31m',    # Red
+            'success': '\033[32m',  # Green
+            'debug': '\033[36m'     # Cyan
         }
-        info = {
-            "model_type": model_data.model_type,
-            "sd_version": next((v for k, v in base_mapping.items() if k in (model_data.base_model or '')), ''),
-            "modelId": model_data.model_id,
-            "modelVersionId": model_data.version_id,
-            "activation_text": ', '.join(model_data.trained_words or []),
-            "sha256": model_data.sha256
-        }
-        try:
-            info_file.write_text(json.dumps(info, indent=4))
-            self.logger.log(f"Saved model info: {info_file}", "success")
-        except Exception as e:
-            self.logger.log(f"Failed to save info: {e}", "error")
-
-    # FIXED: Add method to check token validity
-    def is_token_valid(self) -> bool:
-        """Check if the current token is valid"""
-        return self.token is not None
-
-    def get_token_info(self) -> Optional[Dict]:
-        """Get information about the current token (if valid)"""
-        if not self.token:
-            return None
-            
-        try:
-            # Use a simple API call to check token status
-            headers = {'Authorization': f'Bearer {self.token}'}
-            response = requests.get(f"{self.BASE_URL}/models", headers=headers, timeout=10, params={'limit': 1})
-            if response.status_code == 200:
-                return {"valid": True, "status": "active"}
-            elif response.status_code == 401:
-                return {"valid": False, "status": "invalid"}
-            else:
-                return {"valid": False, "status": f"error_{response.status_code}"}
-        except Exception as e:
-            return {"valid": False, "status": f"network_error: {str(e)}"}
+        color = colors.get(level, '')
+        reset = '\033[0m'
+        print(f"{color}[{timestamp}] CIVITAI {level.upper()}: {message}{reset}")
+    
+    def _rate_limit(self):
+        """Implement rate limiting to respect API limits."""
+        current_time = time.time()
+        time_since_last = current_time - self.last_request_time
+        
+        if time_since_last < self.min_request_interval:
+            sleep_time = self.min_request_interval - time_since_last
+            time.sleep(sleep_time)
+        
+        self.last_request_time = time.time()
+    
+    def _get_cache_key(self, endpoint: str, params: Dict) -> str:
+        """Generate cache key for API responses."""
+        import json
+        key_data = f"{endpoint}:{json.dumps(params, sort_keys=True)}"
+        return hashlib.md5(key_data.encode()).hexdigest()
+    
+    def _is_cache_valid(self, cache_entry: Dict) -> bool:
+        """Check if cache entry is still valid."""
+        return time.time() - cache_entry['timestamp'] < self.cache_duration
+    
+    def _
