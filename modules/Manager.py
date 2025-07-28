@@ -24,7 +24,7 @@ HOME = PATHS['home_path']
 SCR_PATH = PATHS['scr_path']
 SETTINGS_PATH = PATHS['settings_path']
 
-CAI_TOKEN = js.read(SETTINGS_PATH, 'WIDGETS.civitai_token') or ''  # FIXED: No fake token
+CAI_TOKEN = js.read(SETTINGS_PATH, 'WIDGETS.civitai_token') or os.getenv('CIVITAI_API_TOKEN') or ''
 HF_TOKEN = js.read(SETTINGS_PATH, 'WIDGETS.huggingface_token') or ''
 
 
