@@ -149,6 +149,40 @@ def unpack_webui():
     m_download(f"{REPO_URL} {HOME} {UI}.zip")
     ipySys(f"unzip -q -o {zip_path} -d {WEBUI} && rm -rf {zip_path}")
 
+def setup_extension_dependencies():
+    """Install system dependencies and download models for specific extensions."""
+    print("📦 Setting up dependencies for extensions...")
+
+    # --- GroundingDINO / Segment Anything ---
+    print("  -> Checking dependencies for Segment Anything & Replacer...")
+    
+    # 1. Install build-essential for groundingdino compilation
+    try:
+        result = subprocess.run(['dpkg', '-s', 'build-essential'], capture_output=True, text=True)
+        if result.returncode != 0:
+            print("     - Installing build-essential for GroundingDINO...")
+            ipySys("apt-get update -qq && apt-get install -y build-essential")
+            print("     ✅ Done.")
+        else:
+            print("     - build-essential is already installed.")
+    except FileNotFoundError:
+        print("     ⚠️ Could not check for build-essential, attempting installation anyway.")
+        ipySys("apt-get update -qq && apt-get install -y build-essential")
+
+    # 2. Create directory and download SAM model
+    sam_dir = EXTS / 'sd-webui-segment-anything' / 'models' / 'sam'
+    sam_dir.mkdir(parents=True, exist_ok=True)
+    sam_model_path = sam_dir / 'sam_hq_vit_l.pth'
+
+    if not sam_model_path.exists():
+        print(f"     - Downloading SAM model to {sam_model_path}...")
+        sam_url = "https://huggingface.co/lkeab/hq-sam/resolve/main/sam_hq_vit_l.pth"
+        ipySys(f"wget -q --show-progress -O {sam_model_path} {sam_url}")
+        print("     ✅ SAM model downloaded.")
+    else:
+        print("     - SAM model already exists.")
+
+
 def apply_classic_fixes():
     """Apply specific fixes for Classic UI."""
     if UI != 'Classic':
@@ -184,6 +218,10 @@ async def main():
         unpack_webui()
         await download_configuration()
         await install_extensions()
+        
+        # Run dependency setup after extensions are installed
+        setup_extension_dependencies()
+
         apply_classic_fixes()
 
         if UI != 'ComfyUI':
