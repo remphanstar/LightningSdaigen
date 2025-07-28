@@ -108,7 +108,6 @@ def handle_path_and_filename(parts, url, is_git=False):
 def strip_url(url):
     """Normalize special URLs (civitai, huggingface, github)."""
     if 'civitai.com/models/' in url:
-        # FIXED: Only use API if token is available
         if CAI_TOKEN:
             api = CivitAiAPI(CAI_TOKEN)
             data = api.validate_download(url)
@@ -129,17 +128,14 @@ def is_github_url(url):
     """Check if the URL is a valid GitHub URL"""
     return urlparse(url).netloc in ('github.com', 'www.github.com')
 
-# FIXED: Input sanitization functions
 def sanitize_filename(filename):
     """Sanitize filename to prevent path traversal and command injection."""
     if not filename:
         return None
     
-    # Remove any path separators and dangerous characters
     filename = os.path.basename(filename)
     filename = re.sub(r'[^\w\-_\.]', '_', filename)
     
-    # Ensure it's not too long
     if len(filename) > 255:
         name, ext = os.path.splitext(filename)
         filename = name[:250] + ext
@@ -152,7 +148,6 @@ def sanitize_path(path_str):
         return None
     
     path = Path(path_str).resolve()
-    # Ensure path is within allowed directories
     try:
         path.relative_to(HOME)
         return path
@@ -193,7 +188,6 @@ def _process_download(line, log, unzip):
     if not url:
         return
 
-    # Validate URL format
     try:
         parsed = urlparse(url)
         if not all([parsed.scheme, parsed.netloc]):
@@ -205,7 +199,6 @@ def _process_download(line, log, unzip):
 
     path, filename = handle_path_and_filename(parts, url)
     
-    # FIXED: Sanitize inputs
     if filename:
         filename = sanitize_filename(filename)
     if path:
@@ -249,7 +242,7 @@ def _curl_download(url, filename, log):
 
 def _aria2_download(url, filename, log):
     """Download using aria2c with proper argument handling."""
-    user_agent = 'CivitaiLink:Automatic1111' if 'civitai.com' in url else 'Mozilla/5.0'
+    user_agent = 'Mozilla/5.0'
     
     cmd = [
         'aria2c',
@@ -260,7 +253,10 @@ def _aria2_download(url, filename, log):
         '-c', '-x16', '-s16', '-k1M', '-j5'
     ]
 
-    if HF_TOKEN and 'huggingface.co' in url:
+    # **FIX: Correctly add Authorization header for Civitai**
+    if 'civitai.com' in url and CAI_TOKEN:
+        cmd.append(f'--header=Authorization: Bearer {CAI_TOKEN}')
+    elif 'huggingface.co' in url and HF_TOKEN:
         cmd.append(f'--header=Authorization: Bearer {HF_TOKEN}')
 
     if not filename:
@@ -294,16 +290,13 @@ def _unzip_file(file, log):
     
     try:
         with zipfile.ZipFile(path, 'r') as zip_ref:
-            # FIXED: Check for zip bomb and path traversal
             total_size = 0
             for member in zip_ref.filelist:
                 total_size += member.file_size
-                # Check for path traversal
                 if os.path.isabs(member.filename) or ".." in member.filename:
                     log_message(f"Unsafe zip entry: {member.filename}", log, 'warning')
                     continue
                     
-            # Check for zip bomb (>1GB uncompressed)
             if total_size > 1024 * 1024 * 1024:
                 log_message(f"ZIP file too large: {total_size} bytes", log, 'warning')
                 return
@@ -445,7 +438,6 @@ def _process_clone(line, recursive, depth, log):
 
     path, name = handle_path_and_filename(parts, url, is_git=True)
     
-    # FIXED: Sanitize inputs
     if name:
         name = sanitize_filename(name)
     if path:
