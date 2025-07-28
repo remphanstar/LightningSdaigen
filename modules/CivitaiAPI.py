@@ -197,14 +197,14 @@ class CivitAiAPI:
 
         try:
             model_type, name = self._parse_model_name(data, file_name)
-            clean_url, _ = self._process_url(data['downloadUrl'])
+            clean_url, full_url = self._process_url(data['downloadUrl'])
 
             preview_url, preview_name = (None, None)
             if model_type in self.SUPPORTED_TYPES:
                 preview_url, preview_name = self._get_preview(data.get('images', []), name)
 
             return ModelData(
-                download_url=clean_url, # **FIX: Return the CLEAN URL**
+                download_url=full_url, # **FIX: Return the FULL URL with the token**
                 clean_url=clean_url,
                 model_name=name,
                 model_type=model_type,
