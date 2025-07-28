@@ -28,3 +28,4 @@ segment-anything==1.0.0
 pycocotools==2.0.8
 pytorch-lightning==2.4.0
 basicsr==1.4.2
+onnxruntime-gpu==1.18.0
