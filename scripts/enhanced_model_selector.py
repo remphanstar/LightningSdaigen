@@ -1,11 +1,9 @@
-# enhanced_model_selector.py
+# enhanced_model_selector.py - Complete Enhanced Model Selection System
 # This file should be saved in the scripts directory
-
-# Copy the complete EnhancedModelSelector class and all functions from the previous artifacts
-# This is the complete standalone file
 
 import json
 from IPython.display import HTML, Javascript
+from pathlib import Path
 
 class EnhancedModelSelector:
     def __init__(self, widget_manager, model_data_path):
@@ -40,36 +38,6 @@ class EnhancedModelSelector:
             </div>
             <!-- Enhanced selector will be populated by JavaScript -->
         </div>
-        
-        <style>
-        .enhanced-model-selector {{
-            margin: 20px 0;
-            padding: 20px;
-            background: linear-gradient(135deg, #2a2a2a 0%, #1e1e1e 100%);
-            border-radius: 16px;
-            border: 2px solid rgba(255, 151, 239, 0.3);
-        }}
-        
-        .model-selection-header {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }}
-        
-        .model-selection-header h3 {{
-            margin: 0;
-            color: var(--aw-accent-color);
-            font-family: var(--aw-font-family-primary);
-        }}
-        
-        .model-selection-stats {{
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 14px;
-        }}
-        </style>
         '''
         
         selector_widget = self.factory.create_html(html_content)
@@ -83,7 +51,7 @@ class EnhancedModelSelector:
             
             // Wait for DOM to be ready
             setTimeout(() => {{
-                modelSelector = initializeModelSelector(modelData, '{self.container_id}');
+                window.modelSelector = initializeModelSelector(modelData, '{self.container_id}');
                 
                 // Set up Python integration
                 window.updatePythonModelWidget = function(selectedModels) {{
@@ -206,7 +174,7 @@ class EnhancedModelSelector:
         }}
         
         .mode-switch input:checked + .mode-slider {{
-            background: var(--aw-accent-color);
+            background: #ff97ef;
         }}
         
         .mode-switch input:checked + .mode-slider::before {{
@@ -316,38 +284,29 @@ class EnhancedModelSelector:
         return self.factory.create_html(integration_js)
 
 
-# Integration functions
-def create_enhanced_model_selector(widget_manager, model_data_path):
-    """Create enhanced model selector and integrate with existing system"""
+# ===== HELPER FUNCTIONS =====
+
+def create_complete_enhanced_widgets(widget_manager, scripts_path):
+    """Create the complete enhanced model widget section"""
+    
+    # Create enhanced selector
+    model_header = widget_manager.factory.create_header('Enhanced Model Selection')
+    
+    # Load model data based on XL setting
+    xl_models = widget_manager.widgets.get('XL_models', None)
+    model_files = '_xl-models-data.py' if (xl_models and xl_models.value) else '_models-data.py'
+    model_data_path = scripts_path / model_files
     
     # Create enhanced selector
     enhanced_selector = EnhancedModelSelector(widget_manager, model_data_path)
-    selector_widget = enhanced_selector.create_enhanced_selector()
+    enhanced_widget = enhanced_selector.create_enhanced_selector()
     integration_widget = enhanced_selector.create_integration_callbacks()
     
     # Store reference in widget manager
     widget_manager.enhanced_model_selector = enhanced_selector
     widget_manager.widgets['enhanced_model_selector'] = enhanced_selector.hidden_model_widget
     
-    return selector_widget, integration_widget
-
-
-def create_enhanced_model_section(widget_manager, scripts_path):
-    """Replace the existing model section with enhanced version"""
-    
-    model_header = widget_manager.factory.create_header('Enhanced Model Selection')
-    
-    # Load model data
-    model_files = '_xl-models-data.py' if widget_manager.widgets.get('XL_models', {}).value else '_models-data.py'
-    model_data_path = scripts_path / model_files
-    
-    # Create enhanced selector
-    enhanced_selector_widget, integration_widget = create_enhanced_model_selector(
-        widget_manager, 
-        model_data_path
-    )
-    
-    # Keep existing widgets for compatibility
+    # Create traditional widgets for compatibility
     model_num_widget = widget_manager.factory.create_text(
         'Model Numbers:', 
         '', 
@@ -375,398 +334,245 @@ def create_enhanced_model_section(widget_manager, scripts_path):
     
     # Store widgets
     widget_manager.widgets.update({
+        'model': enhanced_selector.hidden_model_widget,  # This is key for compatibility
         'model_num': model_num_widget,
         'inpainting_model': inpainting_model_widget,
         'XL_models': XL_models_widget
     })
     
-    # Create callback for XL toggle to reload enhanced selector
-    def update_enhanced_XL_options(change, widget):
-        """Update enhanced selector when XL toggle changes"""
-        is_xl = change['new']
-        
-        # Reload model data
-        model_files = '_xl-models-data.py' if is_xl else '_models-data.py'
-        model_data_path = scripts_path / model_files
-        
-        if hasattr(widget_manager, 'enhanced_model_selector'):
-            # Reload model data in enhanced selector
-            widget_manager.enhanced_model_selector.model_data = widget_manager.enhanced_model_selector.load_model_data(model_data_path)
-            
-            # Update JavaScript with new data
-            from IPython.display import display, Javascript
-            display(Javascript(f'''
-                if (window.modelSelector) {{
-                    const newModelData = {json.dumps(widget_manager.enhanced_model_selector.model_data)};
-                    window.modelSelector.loadModels(newModelData);
-                }}
-            '''))
-    
-    # Connect XL toggle callback
-    widget_manager.factory.connect_widgets(
-        [(XL_models_widget, 'value')], 
-        update_enhanced_XL_options
-    )
-    
     return [
         model_header,
-        enhanced_selector_widget,
+        enhanced_widget,
         integration_widget,
         model_num_widget,
         options_panel
     ]
 
+def create_vae_widgets(widget_manager, scripts_path):
+    """Create VAE widgets (unchanged)"""
+    vae_header = widget_manager.factory.create_header('VAE Selection')
+    vae_options = widget_manager.read_model_data(f"{scripts_path}/_models-data.py", 'vae')
+    
+    vae_preferred_defaults = [
+        'vae-ft-mse-840000-ema-pruned | 840000 | 840k SD1.5 VAE - vae-ft-mse-840k',
+        'ClearVAE(SD1.5) - v2.3',
+        'none'
+    ]
+    vae_default = widget_manager.get_safe_default(vae_options, vae_preferred_defaults)
+    vae_widget = widget_manager.factory.create_dropdown(vae_options, 'Vae:', vae_default)
+    
+    vae_num_widget = widget_manager.factory.create_text('Vae Number:', '', 'Enter vae numbers for download.')
+    
+    widget_manager.widgets.update({
+        'vae': vae_widget,
+        'vae_num': vae_num_widget
+    })
+    
+    return [vae_header, vae_widget, vae_num_widget]
 
-# Additional CSS for enhanced integration
-ENHANCED_MODEL_CSS = '''
-<style>
-/* Enhanced Model Selector Integration */
-.backup-selector {
-    transition: all 0.3s ease;
-}
+def create_lora_widgets(widget_manager, scripts_path):
+    """Create LoRA widgets (unchanged)"""
+    lora_header = widget_manager.factory.create_header('LoRA Selection')
+    lora_options = widget_manager.read_model_data(f"{scripts_path}/_models-data.py", 'lora')
+    lora_widget = widget_manager.factory.create_select_multiple(lora_options, 'LoRA:', ('none',))
+    
+    widget_manager.widgets.update({
+        'lora': lora_widget
+    })
+    
+    return [lora_header, lora_widget]
 
-.backup-selector select {
-    min-height: 120px;
-}
-
-/* Smooth transitions between modes */
-.enhanced-model-selector {
-    transition: all 0.3s ease;
-}
-
-/* Model Selection Container */
-.model-selection-container {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-    padding: 20px;
-    background: linear-gradient(135deg, #2a2a2a 0%, #1e1e1e 100%);
-    border-radius: 16px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-}
-
-/* Search and Filter Bar */
-.model-filter-bar {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    flex-wrap: wrap;
-    margin-bottom: 15px;
-}
-
-.model-search-input {
-    flex: 1;
-    min-width: 200px;
-    padding: 12px 16px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    border-radius: 12px;
-    color: white;
-    font-size: 14px;
-    transition: all 0.3s ease;
-}
-
-.model-search-input:focus {
-    border-color: var(--aw-accent-color);
-    background: rgba(255, 255, 255, 0.15);
-    outline: none;
-}
-
-.model-search-input::placeholder {
-    color: rgba(255, 255, 255, 0.6);
-}
-
-/* Filter Chips */
-.model-filter-chips {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.filter-chip {
-    padding: 6px 12px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 20px;
-    color: white;
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    user-select: none;
-}
-
-.filter-chip:hover {
-    background: rgba(255, 255, 255, 0.2);
-}
-
-.filter-chip.active {
-    background: var(--aw-accent-color);
-    border-color: var(--aw-accent-color);
-    color: black;
-}
-
-/* Model Grid Layout */
-.model-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 16px;
-    max-height: 500px;
-    overflow-y: auto;
-    padding: 10px;
-}
-
-/* Model Card */
-.model-card {
-    position: relative;
-    background: linear-gradient(145deg, #2d2d2d 0%, #1a1a1a 100%);
-    border: 2px solid rgba(255, 255, 255, 0.1);
-    border-radius: 16px;
-    padding: 16px;
-    cursor: pointer;
-    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    overflow: hidden;
-}
-
-.model-card:hover {
-    transform: translateY(-4px) scale(1.02);
-    border-color: var(--aw-accent-color);
-    box-shadow: 0 12px 40px rgba(255, 151, 239, 0.3);
-}
-
-.model-card.selected {
-    border-color: var(--aw-accent-color);
-    background: linear-gradient(145deg, #3a2d3a 0%, #2a1a2a 100%);
-    box-shadow: 0 8px 32px rgba(255, 151, 239, 0.4);
-}
-
-.model-card.selected::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, var(--aw-accent-color), #ff6b9d, var(--aw-accent-color));
-    animation: shimmer 2s infinite;
-}
-
-@keyframes shimmer {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
-}
-
-/* Model Preview Image */
-.model-preview {
-    width: 100%;
-    height: 120px;
-    background: linear-gradient(45deg, #333, #555);
-    border-radius: 12px;
-    margin-bottom: 12px;
-    overflow: hidden;
-    position: relative;
-}
-
-.model-preview img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    transition: transform 0.3s ease;
-}
-
-.model-card:hover .model-preview img {
-    transform: scale(1.1);
-}
-
-.model-preview-placeholder {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 24px;
-}
-
-/* Model Info */
-.model-info {
-    color: white;
-}
-
-.model-name {
-    font-weight: 600;
-    font-size: 14px;
-    margin-bottom: 8px;
-    line-height: 1.3;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
-.model-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-bottom: 8px;
-}
-
-.model-tag {
-    padding: 2px 6px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 8px;
-    font-size: 10px;
-    color: rgba(255, 255, 255, 0.9);
-}
-
-.model-tag.inpainting {
-    background: rgba(187, 202, 83, 0.8);
-    color: black;
-}
-
-.model-tag.sdxl {
-    background: rgba(234, 134, 26, 0.8);
-    color: white;
-}
-
-.model-tag.nsfw {
-    background: rgba(255, 107, 71, 0.8);
-    color: white;
-}
-
-.model-stats {
-    display: flex;
-    justify-content: space-between;
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.7);
-    margin-top: 8px;
-}
-
-/* Selection Counter */
-.model-selection-counter {
-    position: sticky;
-    top: 0;
-    background: rgba(0, 0, 0, 0.9);
-    backdrop-filter: blur(10px);
-    padding: 12px 16px;
-    border-radius: 12px;
-    margin-bottom: 16px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    z-index: 10;
-}
-
-.selection-count {
-    color: var(--aw-accent-color);
-    font-weight: 600;
-}
-
-.clear-selection-btn {
-    padding: 6px 12px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 8px;
-    color: white;
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.clear-selection-btn:hover {
-    background: rgba(255, 107, 71, 0.8);
-}
-
-/* Quick Select Buttons */
-.quick-select-bar {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-}
-
-.quick-select-btn {
-    padding: 8px 16px;
-    background: linear-gradient(45deg, #4a4a4a, #363636);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 12px;
-    color: white;
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    user-select: none;
-}
-
-.quick-select-btn:hover {
-    background: linear-gradient(45deg, var(--aw-accent-color), #ff6b9d);
-    transform: translateY(-2px);
-}
-
-/* Notification integration */
-.model-notification {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: linear-gradient(135deg, var(--aw-accent-color), #ff6b9d);
-    color: white;
-    padding: 12px 20px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    z-index: 1000;
-    opacity: 0;
-    transform: translateX(100%);
-    transition: all 0.3s ease;
-}
-
-.model-notification.show {
-    opacity: 1;
-    transform: translateX(0);
-}
-
-/* Responsive design improvements */
-@media (max-width: 768px) {
-    .selector-mode-toggle {
-        flex-direction: column;
-        gap: 10px;
-        align-items: flex-start;
+def create_additional_widgets(widget_manager):
+    """Create additional configuration widgets (unchanged)"""
+    additional_header = widget_manager.factory.create_header('Additional')
+    
+    WEBUI_SELECTION = {
+        'A1111': "--xformers --no-half-vae",
+        'ComfyUI': "--dont-print-server",
+        'Forge': "--xformers --cuda-stream --pin-shared-memory",
+        'Classic': "--persistent-patches --cuda-stream --pin-shared-memory",
+        'ReForge': "--xformers --cuda-stream --pin-shared-memory",
+        'SD-UX': "--xformers --no-half-vae"
     }
     
-    .model-grid {
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: 12px;
-    }
+    latest_webui_widget = widget_manager.factory.create_checkbox('Update WebUI', True)
+    latest_extensions_widget = widget_manager.factory.create_checkbox('Update Extensions', True)
+    check_custom_nodes_deps_widget = widget_manager.factory.create_checkbox('Check Custom-Nodes Dependencies', True)
+    change_webui_widget = widget_manager.factory.create_dropdown(list(WEBUI_SELECTION.keys()), 'WebUI:', 'A1111', layout={'width': 'auto'})
+    detailed_download_widget = widget_manager.factory.create_dropdown(['off', 'on'], 'Detailed Download:', 'off', layout={'width': 'auto'})
+
+    choose_changes_box = widget_manager.factory.create_hbox([
+        latest_webui_widget,
+        latest_extensions_widget,
+        check_custom_nodes_deps_widget,
+        change_webui_widget,
+        detailed_download_widget
+    ], layout={'justify_content': 'space-between'})
+
+    controlnet_options = widget_manager.read_model_data(f"{widget_manager.factory.__dict__.get('scripts_path', '')}_models-data.py", 'cnet') if hasattr(widget_manager.factory, 'scripts_path') else ['none']
+    controlnet_widget = widget_manager.factory.create_select_multiple(controlnet_options, 'ControlNet:', ('none',))
+    controlnet_num_widget = widget_manager.factory.create_text('ControlNet Number:', '', 'Enter ControlNet model numbers for download.')
+    commit_hash_widget = widget_manager.factory.create_text('Commit Hash:', '', 'Switch between branches or commits.')
+
+    civitai_token_widget = widget_manager.factory.create_text('CivitAI Token:', '', 'Enter your CivitAi API token.')
+    civitai_button = widget_manager.create_expandable_button('Get CivitAI Token', 'https://civitai.com/user/account')
+    civitai_box = widget_manager.factory.create_hbox([civitai_token_widget, civitai_button])
+
+    huggingface_token_widget = widget_manager.factory.create_text('HuggingFace Token:')
+    huggingface_button = widget_manager.create_expandable_button('Get HuggingFace Token', 'https://huggingface.co/settings/tokens')
+    huggingface_box = widget_manager.factory.create_hbox([huggingface_token_widget, huggingface_button])
+
+    ngrok_token_widget = widget_manager.factory.create_text('Ngrok Token:')
+    ngrok_button = widget_manager.create_expandable_button('Get Ngrok Token', 'https://dashboard.ngrok.com/get-started/your-authtoken')
+    ngrok_box = widget_manager.factory.create_hbox([ngrok_token_widget, ngrok_button])
+
+    zrok_token_widget = widget_manager.factory.create_text('Zrok Token:')
+    zrok_button = widget_manager.create_expandable_button('Get Zrok Token', 'https://colab.research.google.com/drive/1d2sjWDJi_GYBUavrHSuQyHTDuLy36WpU')
+    zrok_box = widget_manager.factory.create_hbox([zrok_token_widget, zrok_button])
+
+    commandline_arguments_widget = widget_manager.factory.create_text('Arguments:', WEBUI_SELECTION['A1111'])
+
+    accent_colors_options = ['anxety', 'blue', 'green', 'peach', 'pink', 'red', 'yellow']
+    theme_accent_widget = widget_manager.factory.create_dropdown(
+        accent_colors_options, 'Theme Accent:', 'anxety',
+        layout={'width': 'auto', 'margin': '0 0 0 8px'}
+    )
+
+    additional_footer_box = widget_manager.factory.create_hbox([commandline_arguments_widget, theme_accent_widget])
+
+    # Store additional widgets
+    widget_manager.widgets.update({
+        'latest_webui': latest_webui_widget,
+        'latest_extensions': latest_extensions_widget,
+        'check_custom_nodes_deps': check_custom_nodes_deps_widget,
+        'change_webui': change_webui_widget,
+        'detailed_download': detailed_download_widget,
+        'controlnet': controlnet_widget,
+        'controlnet_num': controlnet_num_widget,
+        'commit_hash': commit_hash_widget,
+        'civitai_token': civitai_token_widget,
+        'huggingface_token': huggingface_token_widget,
+        'ngrok_token': ngrok_token_widget,
+        'zrok_token': zrok_token_widget,
+        'commandline_arguments': commandline_arguments_widget,
+        'theme_accent': theme_accent_widget
+    })
+
+    return [
+        additional_header,
+        choose_changes_box,
+        widget_manager.factory.create_html('<hr>'),
+        controlnet_widget, controlnet_num_widget,
+        commit_hash_widget,
+        civitai_box, huggingface_box, zrok_box, ngrok_box,
+        widget_manager.factory.create_html('<hr>'),
+        additional_footer_box
+    ]
+
+def create_enhanced_callbacks(widget_manager, scripts_path):
+    """Create enhanced callbacks that preserve original functionality"""
     
-    .model-filter-bar {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    
-    .model-search-input {
-        min-width: unset;
-    }
-}
+    def enhanced_update_XL_options(change, widget):
+        """Enhanced XL toggle that updates both selectors"""
+        try:
+            is_xl = change['new']
+            
+            data_file = '_xl-models-data.py' if is_xl else '_models-data.py'
+            
+            # Update traditional widget options
+            if 'vae' in widget_manager.widgets:
+                widget_manager.widgets['vae'].options = widget_manager.read_model_data(f"{scripts_path}/{data_file}", 'vae')
+            if 'controlnet' in widget_manager.widgets:
+                widget_manager.widgets['controlnet'].options = widget_manager.read_model_data(f"{scripts_path}/{data_file}", 'cnet')
+            
+            # Update enhanced selector if available
+            if hasattr(widget_manager, 'enhanced_model_selector'):
+                model_data_path = scripts_path / data_file
+                widget_manager.enhanced_model_selector.model_data = widget_manager.enhanced_model_selector.load_model_data(model_data_path)
+                
+                # Update JavaScript with new data
+                from IPython.display import display, Javascript
+                display(Javascript(f'''
+                    if (window.modelSelector) {{
+                        const newModelData = {json.dumps(widget_manager.enhanced_model_selector.model_data)};
+                        window.modelSelector.loadModels(newModelData);
+                    }}
+                '''))
+            
+            # Handle inpainting checkbox for XL
+            if 'inpainting_model' in widget_manager.widgets:
+                if is_xl:
+                    widget_manager.widgets['inpainting_model'].add_class('_disable')
+                    widget_manager.widgets['inpainting_model'].value = False
+                else:
+                    widget_manager.widgets['inpainting_model'].remove_class('_disable')
+                    
+        except Exception as e:
+            print(f"Error in enhanced_update_XL_options: {e}")
 
-/* Loading Animation */
-.model-grid.loading {
-    position: relative;
-}
+    def enhanced_update_change_webui(change, widget):
+        """Enhanced WebUI change handling"""
+        try:
+            webui = change['new']
+            WEBUI_SELECTION = {
+                'A1111': "--xformers --no-half-vae",
+                'ComfyUI': "--dont-print-server",
+                'Forge': "--xformers --cuda-stream --pin-shared-memory",
+                'Classic': "--persistent-patches --cuda-stream --pin-shared-memory",
+                'ReForge': "--xformers --cuda-stream --pin-shared-memory",
+                'SD-UX': "--xformers --no-half-vae"
+            }
+            
+            widget_manager.widgets['commandline_arguments'].value = WEBUI_SELECTION.get(webui, '')
 
-.model-grid.loading::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 40px;
-    height: 40px;
-    border: 3px solid rgba(255, 255, 255, 0.3);
-    border-top: 3px solid var(--aw-accent-color);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    transform: translate(-50%, -50%);
-}
+            is_comfy = webui == 'ComfyUI'
 
-@keyframes spin {
-    0% { transform: translate(-50%, -50%) rotate(0deg); }
-    100% { transform: translate(-50%, -50%) rotate(360deg); }
-}
-</style>
-'''
+            widget_manager.widgets['latest_extensions'].layout.display = 'none' if is_comfy else ''
+            widget_manager.widgets['latest_extensions'].value = not is_comfy
+            widget_manager.widgets['check_custom_nodes_deps'].layout.display = '' if is_comfy else 'none'
+            widget_manager.widgets['theme_accent'].layout.display = 'none' if is_comfy else ''
+            if 'Extensions_url' in widget_manager.widgets:
+                widget_manager.widgets['Extensions_url'].description = 'Custom Nodes:' if is_comfy else 'Extensions:'
+        except Exception as e:
+            print(f"Error in enhanced_update_change_webui: {e}")
+
+    # Connect enhanced callbacks
+    widget_manager.factory.connect_widgets([(widget_manager.widgets['change_webui'], 'value')], enhanced_update_change_webui)
+    widget_manager.factory.connect_widgets([(widget_manager.widgets['XL_models'], 'value')], enhanced_update_XL_options)
+
+def create_model_selection_bridge():
+    """Create JavaScript bridge for model selection"""
+    return '''
+    <script>
+    // Enhanced Model Selection Bridge
+    document.addEventListener('DOMContentLoaded', function() {
+        // Sync enhanced selector with traditional widget
+        function syncModelSelection() {
+            const enhancedWidget = document.querySelector('input[title*="Internal widget for model selection"]');
+            const traditionalWidget = document.querySelector('.backup-model-selector select');
+            
+            if (enhancedWidget && traditionalWidget) {
+                // Sync changes from enhanced to traditional
+                enhancedWidget.addEventListener('change', function() {
+                    const selectedModels = this.value.split(',').filter(m => m.trim());
+                    
+                    // Clear traditional selection
+                    Array.from(traditionalWidget.options).forEach(opt => opt.selected = false);
+                    
+                    // Select matching options in traditional
+                    selectedModels.forEach(modelName => {
+                        const option = Array.from(traditionalWidget.options).find(opt => opt.value === modelName.trim());
+                        if (option) option.selected = true;
+                    });
+                    
+                    // Trigger change event
+                    traditionalWidget.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+            }
+        }
+        
+        // Initialize sync
+        setTimeout(syncModelSelection, 1000);
+    });
+    </script>
+    '''
