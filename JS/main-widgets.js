@@ -286,3 +286,416 @@ function setupSearch() {
 
 // Initialize search when DOM is ready
 document.addEventListener('DOMContentLoaded', setupSearch);
+
+// ===== ENHANCED MODEL SELECTOR JAVASCRIPT =====
+
+class ModelSelector {
+    constructor(containerId, options = {}) {
+        this.container = document.getElementById(containerId);
+        this.models = [];
+        this.selectedModels = new Set();
+        this.filteredModels = [];
+        this.filters = {
+            search: '',
+            category: 'all',
+            type: 'all',
+            version: 'all'
+        };
+        
+        this.options = {
+            maxSelection: options.maxSelection || 5,
+            showPreviews: options.showPreviews !== false,
+            allowMultiple: options.allowMultiple !== false,
+            ...options
+        };
+        
+        this.init();
+    }
+    
+    init() {
+        this.createInterface();
+        this.bindEvents();
+    }
+    
+    createInterface() {
+        this.container.innerHTML = `
+            <div class="model-selection-container">
+                <div class="model-selection-counter">
+                    <span class="selection-count">0 models selected</span>
+                    <button class="clear-selection-btn" onclick="window.modelSelector.clearSelection()">
+                        Clear All
+                    </button>
+                </div>
+                
+                <div class="quick-select-bar">
+                    <button class="quick-select-btn" onclick="window.modelSelector.quickSelect('popular')">
+                        ðŸ”¥ Popular
+                    </button>
+                    <button class="quick-select-btn" onclick="window.modelSelector.quickSelect('anime')">
+                        ðŸŽ¨ Anime
+                    </button>
+                    <button class="quick-select-btn" onclick="window.modelSelector.quickSelect('realistic')">
+                        ðŸ“¸ Realistic
+                    </button>
+                    <button class="quick-select-btn" onclick="window.modelSelector.quickSelect('inpainting')">
+                        ðŸŽ­ Inpainting
+                    </button>
+                    <button class="quick-select-btn" onclick="window.modelSelector.quickSelect('sdxl')">
+                        âš¡ SDXL
+                    </button>
+                </div>
+                
+                <div class="model-filter-bar">
+                    <input 
+                        type="text" 
+                        class="model-search-input" 
+                        placeholder="ðŸ” Search models..."
+                        id="modelSearchInput"
+                    >
+                    <div class="model-filter-chips">
+                        <div class="filter-chip active" data-filter="category" data-value="all">All</div>
+                        <div class="filter-chip" data-filter="category" data-value="anime">Anime</div>
+                        <div class="filter-chip" data-filter="category" data-value="realistic">Realistic</div>
+                        <div class="filter-chip" data-filter="category" data-value="artistic">Artistic</div>
+                        <div class="filter-chip" data-filter="type" data-value="inpainting">Inpainting</div>
+                        <div class="filter-chip" data-filter="version" data-value="sdxl">SDXL</div>
+                    </div>
+                </div>
+                
+                <div class="model-grid" id="modelGrid">
+                    <!-- Models will be populated here -->
+                </div>
+            </div>
+        `;
+    }
+    
+    bindEvents() {
+        // Search input
+        const searchInput = document.getElementById('modelSearchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                this.filters.search = e.target.value.toLowerCase();
+                this.filterModels();
+            });
+        }
+        
+        // Filter chips
+        document.querySelectorAll('.filter-chip').forEach(chip => {
+            chip.addEventListener('click', (e) => {
+                const filterType = e.target.dataset.filter;
+                const filterValue = e.target.dataset.value;
+                
+                // Update active state
+                if (filterType) {
+                    document.querySelectorAll(`[data-filter="${filterType}"]`).forEach(c => c.classList.remove('active'));
+                    e.target.classList.add('active');
+                    this.filters[filterType] = filterValue;
+                } else {
+                    // Toggle filter
+                    e.target.classList.toggle('active');
+                }
+                
+                this.filterModels();
+            });
+        });
+    }
+    
+    loadModels(modelData) {
+        this.models = this.parseModelData(modelData);
+        this.filteredModels = [...this.models];
+        this.renderModels();
+    }
+    
+    parseModelData(modelData) {
+        return Object.entries(modelData).map(([key, data], index) => {
+            const name = key;
+            const isInpainting = name.toLowerCase().includes('inpainting') || (data && data.inpainting);
+            const isSDXL = name.toLowerCase().includes('xl') || name.toLowerCase().includes('sdxl');
+            const isNSFW = name.toLowerCase().includes('nsfw') || name.toLowerCase().includes('porn');
+            
+            // Determine category
+            let category = 'realistic';
+            if (name.toLowerCase().includes('anime') || name.toLowerCase().includes('counterfeit')) {
+                category = 'anime';
+            } else if (name.toLowerCase().includes('artistic') || name.toLowerCase().includes('art')) {
+                category = 'artistic';
+            }
+            
+            return {
+                id: `model_${index}`,
+                name: name,
+                url: data ? data.url : '',
+                filename: (data && data.name) ? data.name : '',
+                category: category,
+                tags: [
+                    ...(isInpainting ? ['inpainting'] : []),
+                    ...(isSDXL ? ['sdxl'] : ['sd1.5']),
+                    ...(isNSFW ? ['nsfw'] : []),
+                    category
+                ],
+                isInpainting,
+                isSDXL,
+                isNSFW,
+                preview: this.getModelPreview(name, category),
+                stats: {
+                    size: this.estimateSize(data),
+                    type: isSDXL ? 'SDXL' : 'SD 1.5'
+                }
+            };
+        });
+    }
+    
+    getModelPreview(name, category) {
+        // Generate preview URLs based on model name/category
+        const previewMap = {
+            'anime': 'https://via.placeholder.com/280x120/ff97ef/ffffff?text=Anime+Style',
+            'realistic': 'https://via.placeholder.com/280x120/4a90e2/ffffff?text=Realistic',
+            'artistic': 'https://via.placeholder.com/280x120/f5a623/ffffff?text=Artistic'
+        };
+        
+        return previewMap[category] || previewMap['realistic'];
+    }
+    
+    estimateSize(data) {
+        // Estimate file size based on model type
+        if (data && data.name && data.name.includes('xl')) return '6.5GB';
+        if (data && data.name && data.name.includes('inpainting')) return '4.2GB';
+        return '2.1GB';
+    }
+    
+    filterModels() {
+        this.filteredModels = this.models.filter(model => {
+            // Search filter
+            if (this.filters.search && !model.name.toLowerCase().includes(this.filters.search)) {
+                return false;
+            }
+            
+            // Category filter
+            if (this.filters.category !== 'all' && model.category !== this.filters.category) {
+                return false;
+            }
+            
+            // Type filter
+            if (this.filters.type === 'inpainting' && !model.isInpainting) {
+                return false;
+            }
+            
+            // Version filter
+            if (this.filters.version === 'sdxl' && !model.isSDXL) {
+                return false;
+            }
+            
+            return true;
+        });
+        
+        this.renderModels();
+    }
+    
+    renderModels() {
+        const grid = document.getElementById('modelGrid');
+        if (!grid) return;
+        
+        if (this.filteredModels.length === 0) {
+            grid.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; color: rgba(255,255,255,0.6); padding: 40px;">
+                    <div style="font-size: 48px; margin-bottom: 16px;">ðŸ”</div>
+                    <div>No models found matching your criteria</div>
+                </div>
+            `;
+            return;
+        }
+        
+        grid.innerHTML = this.filteredModels.map(model => `
+            <div class="model-card ${this.selectedModels.has(model.id) ? 'selected' : ''}" 
+                 data-model-id="${model.id}"
+                 onclick="window.modelSelector.toggleModel('${model.id}')">
+                
+                <div class="model-preview">
+                    ${this.options.showPreviews ? 
+                        `<img src="${model.preview}" alt="${model.name}" onerror="this.style.display='none'">` :
+                        `<div class="model-preview-placeholder">ðŸŽ¨</div>`
+                    }
+                </div>
+                
+                <div class="model-info">
+                    <div class="model-name">${this.truncateText(model.name, 60)}</div>
+                    
+                    <div class="model-tags">
+                        ${model.tags.map(tag => 
+                            `<span class="model-tag ${tag}">${this.formatTag(tag)}</span>`
+                        ).join('')}
+                    </div>
+                    
+                    <div class="model-stats">
+                        <span>${model.stats.type}</span>
+                        <span>${model.stats.size}</span>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    toggleModel(modelId) {
+        if (this.selectedModels.has(modelId)) {
+            this.selectedModels.delete(modelId);
+        } else {
+            if (!this.options.allowMultiple) {
+                this.selectedModels.clear();
+            } else if (this.selectedModels.size >= this.options.maxSelection) {
+                this.showNotification(`Maximum ${this.options.maxSelection} models can be selected`, 'warning');
+                return;
+            }
+            this.selectedModels.add(modelId);
+        }
+        
+        this.updateSelection();
+        this.updatePythonWidget();
+    }
+    
+    updateSelection() {
+        // Update visual selection
+        document.querySelectorAll('.model-card').forEach(card => {
+            const modelId = card.dataset.modelId;
+            card.classList.toggle('selected', this.selectedModels.has(modelId));
+        });
+        
+        // Update counter
+        const counter = document.querySelector('.selection-count');
+        if (counter) {
+            const count = this.selectedModels.size;
+            counter.textContent = `${count} model${count !== 1 ? 's' : ''} selected`;
+        }
+        
+        // Update clear button visibility
+        const clearBtn = document.querySelector('.clear-selection-btn');
+        if (clearBtn) {
+            clearBtn.style.opacity = this.selectedModels.size > 0 ? '1' : '0.5';
+        }
+    }
+    
+    updatePythonWidget() {
+        // Get selected model names
+        const selectedNames = Array.from(this.selectedModels).map(id => {
+            const model = this.models.find(m => m.id === id);
+            return model ? model.name : null;
+        }).filter(Boolean);
+        
+        // Update the Python widget (if available)
+        if (window.updatePythonModelWidget) {
+            window.updatePythonModelWidget(selectedNames);
+        }
+        
+        // Trigger custom event
+        window.dispatchEvent(new CustomEvent('modelSelectionChanged', {
+            detail: { selectedModels: selectedNames }
+        }));
+    }
+    
+    quickSelect(type) {
+        this.clearSelection();
+        
+        let modelsToSelect = [];
+        
+        switch(type) {
+            case 'popular':
+                modelsToSelect = this.models.filter(m => 
+                    m.name.toLowerCase().includes('counterfeit') ||
+                    m.name.toLowerCase().includes('merged') ||
+                    m.name.toLowerCase().includes('d5k')
+                ).slice(0, 3);
+                break;
+                
+            case 'anime':
+                modelsToSelect = this.models.filter(m => m.category === 'anime').slice(0, 3);
+                break;
+                
+            case 'realistic':
+                modelsToSelect = this.models.filter(m => m.category === 'realistic').slice(0, 3);
+                break;
+                
+            case 'inpainting':
+                modelsToSelect = this.models.filter(m => m.isInpainting).slice(0, 3);
+                break;
+                
+            case 'sdxl':
+                modelsToSelect = this.models.filter(m => m.isSDXL).slice(0, 3);
+                break;
+        }
+        
+        modelsToSelect.forEach(model => this.selectedModels.add(model.id));
+        this.updateSelection();
+        this.updatePythonWidget();
+    }
+    
+    clearSelection() {
+        this.selectedModels.clear();
+        this.updateSelection();
+        this.updatePythonWidget();
+    }
+    
+    getSelectedModels() {
+        return Array.from(this.selectedModels).map(id => {
+            return this.models.find(m => m.id === id);
+        }).filter(Boolean);
+    }
+    
+    // Utility functions
+    truncateText(text, maxLength) {
+        return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+    }
+    
+    formatTag(tag) {
+        const tagMap = {
+            'inpainting': 'ðŸŽ­',
+            'sdxl': 'âš¡',
+            'sd1.5': 'ðŸ”¹',
+            'nsfw': 'ðŸ”ž',
+            'anime': 'ðŸŽ¨',
+            'realistic': 'ðŸ“¸',
+            'artistic': 'ðŸŽª'
+        };
+        
+        return tagMap[tag] || tag;
+    }
+    
+    showNotification(message, type = 'info') {
+        // Integration with existing notification system
+        if (window.showNotificationFromJS) {
+            window.showNotificationFromJS(message, type);
+        } else {
+            console.log(`${type.toUpperCase()}: ${message}`);
+        }
+    }
+}
+
+// Initialize when DOM is ready
+let modelSelector;
+
+function initializeModelSelector(modelData, containerId = 'enhanced-model-selector') {
+    const container = document.getElementById(containerId);
+    if (!container) {
+        console.error(`Container with ID "${containerId}" not found`);
+        return null;
+    }
+    
+    modelSelector = new ModelSelector(containerId, {
+        maxSelection: 5,
+        showPreviews: true,
+        allowMultiple: true
+    });
+    
+    modelSelector.loadModels(modelData);
+    return modelSelector;
+}
+
+// Python integration function
+function updateModelSelection(selectedModels) {
+    // This function can be called from Python to update the selection
+    if (window.updatePythonModelWidget) {
+        window.updatePythonModelWidget(selectedModels);
+    }
+}
+
+// Make functions globally available
+window.initializeModelSelector = initializeModelSelector;
+window.updateModelSelection = updateModelSelection;
