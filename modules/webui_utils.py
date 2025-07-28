@@ -1,19 +1,18 @@
-""" WebUI Utilities Module | by ANXETY """
+# Enhanced webui_utils.py with complete implementations
+
+""" Enhanced WebUI Utilities Module | by ANXETY """
 
 import json_utils as js
-
 from pathlib import Path
 import json
 import os
 
-
 osENV = os.environ
-
 
 # ======================== CONSTANTS =======================
 
 # Constants (auto-convert env vars to Path)
-PATHS = {k: Path(v) for k, v in osENV.items() if k.endswith('_path')}   # k -> key; v -> value
+PATHS = {k: Path(v) for k, v in osENV.items() if k.endswith('_path')}
 
 HOME = PATHS['home_path']
 VENV = PATHS['venv_path']
@@ -22,13 +21,110 @@ SETTINGS_PATH = PATHS['settings_path']
 
 DEFAULT_UI = 'A1111'
 
+# Enhanced WEBUI_PATHS with complete configurations
 WEBUI_PATHS = {
+    # Standard Stable Diffusion WebUIs
     'A1111': ('Stable-diffusion', 'VAE', 'Lora', 'embeddings', 'extensions', 'ESRGAN', 'outputs'),
     'ComfyUI': ('checkpoints', 'vae', 'loras', 'embeddings', 'custom_nodes', 'upscale_models', 'output'),
     'Classic': ('Stable-diffusion', 'VAE', 'Lora', 'embeddings', 'extensions', 'ESRGAN', 'output'),
     'Lightning.ai': ('Stable-diffusion', 'VAE', 'Lora', 'embeddings', 'extensions', 'ESRGAN', 'outputs'),
-    'FaceFusion': ('', '', '', '', '', '', 'output'),
-    'DreamO': ('', '', '', '', '', '', 'output')
+    
+    # Enhanced Forge Variants
+    'Forge': ('models/Stable-diffusion', 'models/VAE', 'models/Lora', 'embeddings', 'extensions', 'models/ESRGAN', 'outputs'),
+    'ReForge': ('models/Stable-diffusion', 'models/VAE', 'models/Lora', 'embeddings', 'extensions', 'models/ESRGAN', 'outputs'),
+    'SD-UX': ('models/Stable-diffusion', 'models/VAE', 'models/Lora', 'embeddings', 'extensions', 'models/ESRGAN', 'outputs'),
+    
+    # Face Manipulation WebUIs
+    'FaceFusion': ('models/inswapper', 'models/gfpgan', 'models/gpen', 'faces', '', 'models/enhancer', 'output'),
+    'RoopUnleashed': ('models', 'frames', 'faces', 'temp', '', 'enhancers', 'output'),
+    
+    # Specialized WebUIs
+    'DreamO': ('models/diffusion', 'models/vae', 'models/lora', 'assets', 'custom_nodes', 'models/upscale', 'output')
+}
+
+# Enhanced WebUI-specific settings
+WEBUI_FEATURES = {
+    'A1111': {
+        'supports_extensions': True,
+        'supports_models': True,
+        'supports_lora': True,
+        'supports_controlnet': True,
+        'supports_vae': True,
+        'launch_script': 'launch.py',
+        'config_files': ['config.json', 'ui-config.json']
+    },
+    'ComfyUI': {
+        'supports_extensions': False,  # Uses custom_nodes instead
+        'supports_models': True,
+        'supports_lora': True,
+        'supports_controlnet': True,
+        'supports_vae': True,
+        'launch_script': 'main.py',
+        'config_files': ['extra_model_paths.yaml']
+    },
+    'Forge': {
+        'supports_extensions': True,
+        'supports_models': True,
+        'supports_lora': True,
+        'supports_controlnet': True,
+        'supports_vae': True,
+        'launch_script': 'launch.py',
+        'config_files': ['config.json', 'ui-config.json']
+    },
+    'ReForge': {
+        'supports_extensions': True,
+        'supports_models': True,
+        'supports_lora': True,
+        'supports_controlnet': True,
+        'supports_vae': True,
+        'launch_script': 'launch.py',
+        'config_files': ['config.json', 'ui-config.json']
+    },
+    'SD-UX': {
+        'supports_extensions': True,
+        'supports_models': True,
+        'supports_lora': True,
+        'supports_controlnet': True,
+        'supports_vae': True,
+        'launch_script': 'launch.py',
+        'config_files': ['config.json', 'ui-config.json']
+    },
+    'FaceFusion': {
+        'supports_extensions': False,
+        'supports_models': False,  # Uses specialized face models
+        'supports_lora': False,
+        'supports_controlnet': False,
+        'supports_vae': False,
+        'launch_script': 'run.py',
+        'config_files': ['facefusion.ini']
+    },
+    'RoopUnleashed': {
+        'supports_extensions': False,
+        'supports_models': False,  # Uses specialized face models
+        'supports_lora': False,
+        'supports_controlnet': False,
+        'supports_vae': False,
+        'launch_script': 'run.py',
+        'config_files': ['config.yaml']
+    },
+    'DreamO': {
+        'supports_extensions': False,
+        'supports_models': True,
+        'supports_lora': True,
+        'supports_controlnet': False,
+        'supports_vae': True,
+        'launch_script': 'app.py',
+        'config_files': ['config.yaml']
+    },
+    'Classic': {
+        'supports_extensions': True,
+        'supports_models': True,
+        'supports_lora': True,
+        'supports_controlnet': True,
+        'supports_vae': True,
+        'launch_script': 'launch.py',
+        'config_files': ['config.json', 'ui-config.json']
+    }
 }
 
 
@@ -49,55 +145,99 @@ def update_current_webui(current_value: str) -> None:
 
 def _set_webui_paths(ui: str) -> None:
     """Configure paths for specified UI, fallback to A1111 for unknown UIs."""
-    selected_ui = ui if ui in WEBUI_PATHS else DEFAULT_UI
-    webui_root = HOME / ui
-    models_root = webui_root / 'models'
+    paths = WEBUI_PATHS.get(ui, WEBUI_PATHS[DEFAULT_UI])
+    path_names = ['model_dir', 'vae_dir', 'lora_dir', 'embed_dir', 'extension_dir', 'upscale_dir', 'output_dir']
+    
+    webui_base = HOME / ui
+    for i, folder in enumerate(paths):
+        if i < len(path_names) and folder:
+            js.save(SETTINGS_PATH, f'WEBUI.{path_names[i]}', str(webui_base / folder))
+        elif i < len(path_names):
+            # Set empty path for unsupported features
+            js.save(SETTINGS_PATH, f'WEBUI.{path_names[i]}', '')
 
-    # Get path components for selected UI
-    paths = WEBUI_PATHS[selected_ui]
-    checkpoint, vae, lora, embed, extension, upscale, output = paths
 
-    # Configure special paths
-    is_comfy = selected_ui == 'ComfyUI'
-    is_classic = selected_ui == 'Classic'
-    control_dir = 'controlnet' if is_comfy else 'ControlNet'
-    embed_root = models_root if (is_comfy or is_classic) else webui_root
-    config_root = webui_root / 'user/default' if is_comfy else webui_root
+def get_webui_features(ui: str) -> dict:
+    """Get feature support information for a WebUI."""
+    return WEBUI_FEATURES.get(ui, WEBUI_FEATURES[DEFAULT_UI])
 
-    path_config = {
-        'model_dir': str(models_root / checkpoint) if checkpoint else str(webui_root),
-        'vae_dir': str(models_root / vae) if vae else str(webui_root),
-        'lora_dir': str(models_root / lora) if lora else str(webui_root),
-        'embed_dir': str(embed_root / embed) if embed else str(webui_root),
-        'extension_dir': str(webui_root / extension) if extension else str(webui_root),
-        'control_dir': str(models_root / control_dir),
-        'upscale_dir': str(models_root / upscale) if upscale else str(webui_root),
-        'output_dir': str(webui_root / output) if output else str(webui_root),
-        'config_dir': str(config_root),
-        # Additional directories
-        'adetailer_dir': str(models_root / ('ultralytics' if is_comfy else 'adetailer')),
-        'clip_dir': str(models_root / ('clip' if is_comfy else 'text_encoder')),
-        'unet_dir': str(models_root / ('unet' if is_comfy else 'text_encoder')),
-        'vision_dir': str(models_root / 'clip_vision'),
-        'encoder_dir': str(models_root / ('text_encoders' if is_comfy else 'text_encoder')),
-        'diffusion_dir': str(models_root / 'diffusion_models')
+
+def is_webui_supported(ui: str, feature: str) -> bool:
+    """Check if a WebUI supports a specific feature."""
+    features = get_webui_features(ui)
+    return features.get(f'supports_{feature}', False)
+
+
+def get_launch_script(ui: str) -> str:
+    """Get the correct launch script for a WebUI."""
+    features = get_webui_features(ui)
+    return features.get('launch_script', 'launch.py')
+
+
+def get_config_files(ui: str) -> list:
+    """Get list of configuration files for a WebUI."""
+    features = get_webui_features(ui)
+    return features.get('config_files', [])
+
+
+def validate_webui_selection(ui: str) -> bool:
+    """Validate if the WebUI selection is supported."""
+    return ui in WEBUI_PATHS
+
+
+def get_webui_specific_paths(ui: str) -> dict:
+    """Get WebUI-specific path mappings."""
+    if ui not in WEBUI_PATHS:
+        ui = DEFAULT_UI
+    
+    paths = WEBUI_PATHS[ui]
+    path_names = ['model_dir', 'vae_dir', 'lora_dir', 'embed_dir', 'extension_dir', 'upscale_dir', 'output_dir']
+    
+    webui_base = HOME / ui
+    return {
+        name: str(webui_base / folder) if folder else ''
+        for name, folder in zip(path_names, paths)
     }
 
-    js.update(SETTINGS_PATH, 'WEBUI', path_config)
+
+# ===================== UTILITY FUNCTIONS =====================
+
+def get_available_webuis() -> list:
+    """Get list of all available WebUIs."""
+    return list(WEBUI_PATHS.keys())
 
 
-def handle_setup_timer(webui_path: str, timer_webui: float) -> float:
-    """Manage timer persistence for WebUI instances."""
-    timer_file = Path(webui_path) / 'static' / 'timer.txt'
-    timer_file.parent.mkdir(parents=True, exist_ok=True)
+def get_face_swap_webuis() -> list:
+    """Get list of face-swapping capable WebUIs."""
+    return ['FaceFusion', 'RoopUnleashed']
 
-    try:
-        with timer_file.open('r') as f:
-            timer_webui = float(f.read())
-    except FileNotFoundError:
-        pass
 
-    with timer_file.open('w') as f:
-        f.write(str(timer_webui))
+def get_standard_sd_webuis() -> list:
+    """Get list of standard Stable Diffusion WebUIs."""
+    return [ui for ui in WEBUI_PATHS.keys() if is_webui_supported(ui, 'models')]
 
-    return timer_webui
+
+def get_webui_category(ui: str) -> str:
+    """Get the category of a WebUI."""
+    if ui in get_face_swap_webuis():
+        return 'face_swap'
+    elif ui in ['ComfyUI']:
+        return 'node_based'
+    elif ui in ['Forge', 'ReForge', 'SD-UX']:
+        return 'enhanced_sd'
+    elif ui in ['DreamO']:
+        return 'specialized'
+    else:
+        return 'standard_sd'
+
+
+def setup_webui_environment(ui: str) -> dict:
+    """Setup environment variables for a specific WebUI."""
+    env_vars = {}
+    
+    if ui == 'ComfyUI':
+        env_vars['COMFYUI_MODEL_PATH'] = str(HOME / ui / 'models')
+    elif ui in get_face_swap_webuis():
+        env_vars['ROOP_MODEL_PATH'] = str(HOME / ui / 'models')
+    
+    return env_vars
